@@ -6,6 +6,9 @@ import {
 import type { Briefing, BriefingResult, SubgraphData } from '@/lib/types'
 import SubGraph, { SubGraphLegend } from '@/components/SubGraph'
 
+// Force dynamic rendering — never cache this page
+export const dynamic = 'force-dynamic'
+
 // ── Metadata ──────────────────────────────────────────────────────────────────
 
 export function generateStaticParams() {

@@ -37,7 +37,7 @@ async function get<T>(
 ): Promise<T | null> {
   try {
     const res = await fetch(`${BASE}${path}`, {
-      next: { revalidate: 60 },   // 1-minute ISR default; override per call
+      cache: 'no-store',   // always fresh; callers can override with opts
       ...opts,
     })
     if (!res.ok) return null
@@ -50,7 +50,7 @@ async function get<T>(
 // ── Briefings (static, cache aggressively) ────────────────────────────────────
 
 export function getBriefing(n: 1 | 2 | 3 | 4): Promise<Briefing | null> {
-  return get<Briefing>(`/briefings/${n}`, { next: { revalidate: 3600 } })
+  return get<Briefing>(`/briefings/${n}`)
 }
 
 // ── Norm detail + neighbourhood ───────────────────────────────────────────────
