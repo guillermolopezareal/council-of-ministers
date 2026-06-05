@@ -2,7 +2,7 @@
 
 > Turn the Spanish BOE into a knowledge graph. Answer the four questions the Council of Ministers will actually ask in that room.
 
-12 288 consolidated norms. Two centuries of amendments, repeals, and citations. Mapped as a graph, queried in milliseconds, presented as a briefing a minister can read without touching a query.
+12 045 consolidated norms. Two centuries of amendments, repeals, and citations. Mapped as a graph, queried in milliseconds, presented as a briefing a minister can read without touching a query. A natural-language assistant lets ministers ask their own questions in Spanish or English — the system generates the Cypher, runs it, and shows both the answer and the query.
 
 ---
 
@@ -10,59 +10,105 @@
 
 | # | The question | The answer |
 |---|---|---|
-| **01** | Which laws have become unreadable? | The **Código Civil** has been amended **85 times** by **52 different acts** since 1889 — the most fragmented law in Spain |
-| **02** | Who made the mess? | The **Ley de Presupuestos 2023** rewrote **71 distinct laws** in a single omnibus act |
-| **03** | How much statute book rests on dead law? | **36 %** of in-force norms — **3 276 of 9 100** — cite at least one repealed law |
-| **04** | What is the blast radius of Ley 30/1992? | **287 in-force norms** still invoke a statute formally repealed on 2 April 2021 |
+| **01** | Which laws have become unreadable? | The **Ley del IRPF (35/2006)** has been amended **87 times** by 87 different acts — the most fragmented law in Spain |
+| **02** | Who made the mess? | **Ley 5/2017** rewrote **282 distinct laws** in a single omnibus act |
+| **03** | How much statute book rests on dead law? | **17.6 %** of in-force norms — **1 709 of 9 716** — cite at least one repealed law |
+| **04** | What is the blast radius of Ley 30/1992? | **275 in-force norms** still invoke a statute formally repealed on 2 April 2021 |
 
 ---
 
-## Screenshot
+## Local setup
 
-![Explorer and Briefing 01](docs/screenshot.png)
-*The graph explorer (left) and Briefing 01 as seen by a minister (right). Every briefing opens with the answer in the first sentence — no query, no jargon.*
+**Prerequisites:**
+- Python 3.10+
+- Node.js 17+
+- Docker (for Neo4j — no account needed)
 
----
-
-## Local setup — three commands
-
-**Prerequisites:** Python 3.10 +, Node.js 17 +, Neo4j 4.4 + running locally (default bolt://localhost:7687).
+### 1 — Clone and configure
 
 ```bash
-# Copy env template and fill in your Neo4j password
+git clone https://github.com/guillermolopezareal/council-of-ministers.git
+cd council-of-ministers
 cp .env.example .env
 ```
 
+Edit `.env` and set at minimum:
+```
+NEO4J_PASSWORD=password
+ANTHROPIC_API_KEY=sk-ant-...   # optional — only needed for the /ask chat
+```
+
+Create `web/.env.local`:
+```
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
+```
+
+### 2 — Start Neo4j (Docker, no account)
+
 ```bash
-# 1 — Download the full BOE corpus, build the graph, compute the briefings
-#     (~15 min on first run; subsequent runs skip already-fetched norms)
-python ingest.py && \
-python load_neo4j.py --reset && \
+docker run --name neo4j-boe \
+  -p 7474:7474 -p 7687:7687 \
+  -e NEO4J_AUTH=neo4j/password \
+  --restart unless-stopped \
+  -d neo4j:5
+```
+
+### 3 — Download corpus, build graph, compute briefings (~15 min first run)
+
+**Windows (PowerShell):**
+```powershell
+.\.venv\Scripts\Activate.ps1  # or: python -m venv .venv first
+pip install httpx neo4j fastapi uvicorn anthropic
+
+# Load env vars
+Get-Content .env | ForEach-Object {
+    if ($_ -match '^([^#=]+)=(.+)$') {
+        [System.Environment]::SetEnvironmentVariable($matches[1].Trim(), $matches[2].Trim(), 'Process')
+    }
+}
+
+python ingest.py
+python load_neo4j.py --reset
 python briefings.py
 ```
 
+**Linux / macOS:**
 ```bash
-# 2 — Start the API  (port 8000)
+python -m venv .venv && source .venv/bin/activate
+pip install httpx neo4j fastapi uvicorn anthropic
+export $(grep -v '^#' .env | xargs)
+python ingest.py && python load_neo4j.py --reset && python briefings.py
+```
+
+### 4 — Start the API (port 8000)
+
+```powershell
+# Windows — in a dedicated terminal with env loaded
 uvicorn api.main:app --reload
 ```
 
-```bash
-# 3 — Start the frontend  (port 3000)
-cd web && npm install && npm run dev
+### 5 — Start the frontend (port 3000)
+
+```powershell
+# Windows — in a second terminal
+cd web
+npm install
+npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The four briefing cards load data from the API. The graph explorer seeds from the top briefing results.
+Open **http://localhost:3000**.
 
-### Environment variables
+---
+
+## Environment variables
 
 | Variable | Default | Required |
 |---|---|---|
 | `NEO4J_URI` | `bolt://localhost:7687` | No |
 | `NEO4J_USER` | `neo4j` | No |
 | `NEO4J_PASSWORD` | — | **Yes** |
-| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | No |
-
-Create `.env` in the project root; `ingest.py`, `load_neo4j.py`, `briefings.py`, and the FastAPI server all read from it.
+| `ANTHROPIC_API_KEY` | — | No (activates `/ask` chat) |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Set to `http://127.0.0.1:8000` in `web/.env.local` on Windows |
 
 ---
 
@@ -72,17 +118,26 @@ Create `.env` in the project root; `ingest.py`, `load_neo4j.py`, `briefings.py`,
 BOE API (boe.es/datosabiertos)
     │
     ▼
-ingest.py          — async download, 10 concurrent, resumable
-    │  data/raw/<id>.json
+ingest.py          — async download, 10 concurrent, resumable, idempotent
+    │  data/raw/<id>.json  (12 045 files)
     ▼
-load_neo4j.py      — MERGE nodes + edges, batched 1 000, idempotent
-    │  Neo4j graph DB
+load_neo4j.py      — MERGE nodes + edges, batched 1 000
+    │  Neo4j 5 — 25 864 nodes, 54 406 edges
     ▼
 briefings.py       — four parameterized Cypher queries → data/briefings/*.json
     │
-    ├── api/       — FastAPI, briefings served from memory, /norm, /search, /subgraph
+    ├── api/       FastAPI
+    │   ├── /briefings/{n}   served from memory (<1 ms)
+    │   ├── /norm/{id}       1-hop neighbourhood
+    │   ├── /search          substring search
+    │   ├── /subgraph        bounded BFS for explorer
+    │   └── /ask             LLM → Cypher → result (claude-sonnet-4-5)
     │
-    └── web/       — Next.js 13 App Router + Tailwind + react-force-graph-2d
+    └── web/       Next.js 13 + Tailwind
+        ├── /                landing with four briefing cards
+        ├── /briefings/[id]  answer + table + embedded graph
+        ├── /explore         full interactive graph explorer
+        └── ChatPanel        floating natural-language assistant
 ```
 
 ---
@@ -95,23 +150,25 @@ briefings.py       — four parameterized Cypher queries → data/briefings/*.js
 ├── load_neo4j.py          Graph loader (MERGE nodes + edges)
 ├── briefings.py           Four briefing queries → MD + JSON
 ├── api/
-│   ├── main.py            FastAPI app, CORS, lifespan
+│   ├── main.py            FastAPI app, CORS, lifespan, /ask endpoint
 │   ├── queries.py         All Cypher lives here
+│   ├── llm.py             Anthropic integration + Cypher safety gate
 │   └── db.py              Neo4j driver singleton
 ├── web/
 │   ├── app/               Next.js App Router pages
 │   │   ├── page.tsx       Landing — four briefing cards
 │   │   ├── briefings/[id] One page per question
 │   │   └── explore/       Full graph explorer
-│   └── components/        SubGraph, GraphExplorer, NodePanel
+│   └── components/        SubGraph, GraphExplorer, NodePanel, ChatPanel
 ├── data/
 │   ├── raw/               <id>.json per norm + _index.json
 │   └── briefings/         1.json – 4.json (frontend data)
 ├── PLAN.md                Initial challenge analysis
 ├── DISCOVERY.md           BOE API exploration notes
-├── SCHEMA.md              Graph schema with all decisions
-├── DESIGN.md              One-page design document (this challenge's deliverable 3)
-└── BRIEFINGS.md           Live briefing output with Cypher
+├── SCHEMA.md              Graph schema with all decisions (incl. full relation code table)
+├── DESIGN.md              One-page design document (Deliverable 3)
+├── BRIEFINGS.md           Live briefing output with Cypher
+└── VIDEO.md               5-minute video script for the Council
 ```
 
 ---
@@ -120,22 +177,35 @@ briefings.py       — four parameterized Cypher queries → data/briefings/*.js
 
 | Layer | Choice | Why |
 |---|---|---|
-| Corpus download | Python + httpx + asyncio | Async, resumable, zero extra deps |
-| Graph database | Neo4j 4.4 | Native graph queries; MATCH path syntax for BFS |
-| API | FastAPI | Thin, async, auto-docs, easy CORS |
-| Frontend | Next.js 13 + Tailwind | Server components for briefing pages; clean build with Node 17 |
-| Graph rendering | react-force-graph-2d | Canvas-based, 2 000 + nodes, no WebGL dependency |
+| Corpus download | Python + httpx + asyncio | Async, resumable, 10 concurrent, zero extra deps |
+| Graph database | Neo4j 5 (Docker) | Native graph queries; MATCH path syntax for BFS |
+| API | FastAPI | Thin, async, auto-docs at `/docs`, open CORS |
+| LLM | Anthropic claude-sonnet-4-5 | Schema prompt cached; safety gate blocks write Cypher |
+| Frontend | Next.js 13 + Tailwind | Server components for briefings; works with Node 17 |
+| Graph rendering | react-force-graph-2d | Canvas-based, 2 000+ nodes, no WebGL dependency |
 
 ---
 
 ## Re-running
 
-Every script is idempotent. Run any command again safely:
+Every script is idempotent:
 
 - `ingest.py` — skips files already on disk; `--refresh-index` re-fetches the catalogue
 - `load_neo4j.py` — MERGE never duplicates; `--reset` wipes and reloads
-- `briefings.py` — overwrites `data/briefings/*.json` and `BRIEFINGS.md`
+- `briefings.py` — overwrites `data/briefings/*.json` and `BRIEFINGS.md`; restart the API after to load fresh data into memory
 
 ---
 
-*Built by Guille · Reversa AI technical challenge · June 2026*
+## Deliverables
+
+| # | Deliverable | File / URL |
+|---|---|---|
+| 1 | Code in a public repository | This repo |
+| 2 | Web platform with graph + four briefings | `web/` — runs at localhost:3000 |
+| 3 | 1-page design doc | `DESIGN.md` |
+| 4 | 5-minute video for the Council | `VIDEO.md` (script) |
+| Bonus | Natural-language `/ask` chat assistant | Floating "Consultar" button on every page |
+
+---
+
+*Built by Guille · Reversa AI founding engineer challenge · June 2026*
