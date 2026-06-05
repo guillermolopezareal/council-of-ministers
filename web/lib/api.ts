@@ -9,7 +9,7 @@ import type {
 } from './types'
 
 const BASE =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') ?? 'http://localhost:8000'
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') ?? 'http://127.0.0.1:8000'
 
 // ── Core fetch ────────────────────────────────────────────────────────────────
 
@@ -35,14 +35,19 @@ async function get<T>(
   path: string,
   opts?: RequestInit,
 ): Promise<T | null> {
+  const url = `${BASE}${path}`
   try {
-    const res = await fetch(`${BASE}${path}`, {
-      cache: 'no-store',   // always fresh; callers can override with opts
+    const res = await fetch(url, {
+      cache: 'no-store',
       ...opts,
     })
-    if (!res.ok) return null
+    if (!res.ok) {
+      console.error(`[API] ${res.status} ${res.statusText} — ${url}`)
+      return null
+    }
     return res.json() as Promise<T>
-  } catch {
+  } catch (e) {
+    console.error(`[API] fetch failed — ${url} —`, e)
     return null
   }
 }
