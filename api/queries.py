@@ -129,11 +129,12 @@ def search_norms(session: Session, q: str, limit: int) -> list[dict]:
 # ── Subgraph for the explorer ──────────────────────────────────────────────────
 
 # Step 1 — collect all nodes within `depth` hops (undirected, bounded by cap).
-# The variable-length undirected path [*1..$depth] expands in all directions;
-# DISTINCT caps the unique node set before slicing avoids redundant returns.
-_SUBGRAPH_NODES_Q = """
-MATCH (root:Norm {id: $root})
-OPTIONAL MATCH (root)-[*1..$depth]-(n:Norm)
+# Neo4j 5 does not allow query parameters inside variable-length path bounds
+# ([*1..$depth] is rejected as a syntax error). Depth is validated to {1,2,3}
+# by the route, so it is safe to embed as a literal via string formatting.
+_SUBGRAPH_NODES_Q_TMPL = """
+MATCH (root:Norm {{id: $root}})
+OPTIONAL MATCH (root)-[*1..{depth}]-(n:Norm)
 WITH root, collect(DISTINCT n)[..$cap] AS neighbours
 RETURN [root] + neighbours AS nodes
 """
@@ -174,7 +175,8 @@ def get_subgraph(
     Returns None when root does not exist.
     """
     cap = max(0, node_limit - 1)  # reserve 1 slot for root itself
-    r = session.run(_SUBGRAPH_NODES_Q, root=root, depth=depth, cap=cap).single()
+    query = _SUBGRAPH_NODES_Q_TMPL.format(depth=int(depth))  # literal, safe (validated 1-3)
+    r = session.run(query, root=root, cap=cap).single()
     if r is None:
         return None
 
