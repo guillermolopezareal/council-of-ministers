@@ -129,13 +129,15 @@ Every consolidated norm (law, decree, order, resolution…) is one node.
 Relationships — all DIRECTED from acting norm → affected norm:
 
   (:Norm)-[:AMENDS   {relacion_codigo, relacion_texto, detail}          ]->(:Norm)
-      A modified B  (MODIFICA, AÑADE, SUSTITUYE, DEJA SIN EFECTO)
+      A modified B  (MODIFICA, AÑADE, SUSTITUYE, DEJA SIN EFECTO,
+                     SUSPENDE, SUPRIME, PRORROGA, AMPLÍA)
 
   (:Norm)-[:REPEALS  {relacion_codigo, relacion_texto, detail, is_partial}]->(:Norm)
       A derogated B  (DEROGA).  is_partial=true when specific articles only.
 
   (:Norm)-[:CITES    {relacion_codigo, relacion_texto, detail}          ]->(:Norm)
-      A invokes B as legal basis  (CITA, DE CONFORMIDAD, SE DESARROLLA…)
+      A invokes B as legal basis  (CITA, DE CONFORMIDAD, SE DESARROLLA,
+                                   TRANSPONE, DECLARA la vigencia)
 
   (:Norm)-[:CORRECTS {relacion_codigo, relacion_texto, detail}          ]->(:Norm)
       A is an erratum correction for B.

@@ -60,8 +60,20 @@ to avoid duplicates; they are queryable by reversing direction.
 | `relacion_texto` | string |
 | `detail` | string (the `texto` field) |
 
-**Relation codes captured:** 270 (MODIFICA), 407 (AÑADE), 245 (SUSTITUYE), 230 (DEJA SIN EFECTO).
-These all represent a surviving legal dependency — B is changed but not abolished.
+**Relation codes captured:** 270 (MODIFICA), 407 (AÑADE), 245 (SUSTITUYE), 230 (DEJA SIN EFECTO),
+231 (SUSPENDE), 235 (SUPRIME), 401 (PRORROGA), 406 (AMPLÍA).
+All represent a surviving legal dependency — B is changed in some dimension but not abolished.
+
+| Code | Text | Why AMENDS |
+|---|---|---|
+| 270 | MODIFICA | Changes the text of specific provisions |
+| 407 | AÑADE | Adds new articles or sections |
+| 245 | SUSTITUYE | Replaces specific provisions with new text |
+| 230 | DEJA SIN EFECTO | Suspends/nullifies without formal repeal |
+| 231 | SUSPENDE | Temporarily suspends application of provisions; reversible, text unchanged |
+| 235 | SUPRIME | Removes specific articles — structural modification, mirror of AÑADE |
+| 401 | PRORROGA | Extends the operative period (temporal scope) of target norm |
+| 406 | AMPLÍA | Extends the application scope (breadth) of target norm |
 
 **Used by:** Briefing 01 (count incoming AMENDS per norm), Briefing 02 (count outgoing AMENDS per norm).
 
@@ -92,9 +104,18 @@ These all represent a surviving legal dependency — B is changed but not abolis
 ```
 
 **Relation codes captured:** 330 (CITA), 440 (DE CONFORMIDAD con / SE DICTA DE CONFORMIDAD),
-490 (SE DESARROLLA), 331 (SE DICTA EN RELACIÓN).
-All four express a legal dependency on B remaining valid; if B is repealed, A is operating
+490 (SE DESARROLLA), 331 (SE DICTA EN RELACIÓN), 426 (TRANSPONE), 480 (DECLARA la vigencia).
+All six express a legal dependency on B remaining valid; if B is repealed, A is operating
 on dead ground — exactly what Briefings 03 and 04 query.
+
+| Code | Text | Why CITES |
+|---|---|---|
+| 330 | CITA | Explicit textual citation of another norm |
+| 440 | DE CONFORMIDAD / SE DICTA DE CONFORMIDAD | Issued pursuant to — invokes target as legal authority |
+| 490 | SE DESARROLLA | Implementing regulation — depends on target for its legal basis |
+| 331 | SE DICTA EN RELACIÓN | Issued in connection with — derivative citation |
+| 426 | TRANSPONE | Transposes an EU Directive into national law; same dependency structure as SE DESARROLLA. Targets are often DOUE-L-… documents not in our corpus — they become stub nodes with `in_corpus: false` |
+| 480 | DECLARA la vigencia | Explicitly declares another norm remains in force; creates a citation dependency and is particularly relevant to Briefing 03 (the declared norm must stay valid for the citing norm to function) |
 
 **Used by:** Briefing 03 (CITES where B.is_dead), Briefing 04 (CITES where B.id = `BOE-A-1992-26318`).
 
@@ -111,13 +132,36 @@ without polluting graph metrics.
 
 ---
 
-## 3. Redundant Edges to Drop (and Why)
+## 3. Relation Code Reference (complete)
+
+### Mapped codes
+
+| Code | Text | Edge type |
+|---|---|---|
+| 201 | CORRECCIÓN de errores | CORRECTS |
+| 210 | DEROGA / SE DEROGA | REPEALS |
+| 230 | DEJA SIN EFECTO | AMENDS |
+| 231 | SUSPENDE / SE SUSPENDE | AMENDS |
+| 235 | SUPRIME | AMENDS |
+| 245 | SUSTITUYE | AMENDS |
+| 270 | MODIFICA / SE MODIFICA | AMENDS |
+| 331 | SE DICTA EN RELACIÓN | CITES |
+| 330 | CITA | CITES |
+| 401 | PRORROGA / SE PRORROGA | AMENDS |
+| 406 | AMPLÍA / SE AMPLÍA | AMENDS |
+| 407 | AÑADE / SE AÑADE | AMENDS |
+| 426 | TRANSPONE | CITES |
+| 440 | DE CONFORMIDAD / SE DICTA DE CONFORMIDAD | CITES |
+| 480 | DECLARA la vigencia | CITES |
+| 490 | SE DESARROLLA | CITES |
+
+### Dropped codes (and why)
 
 | Code | Text | Decision | Justification |
 |---|---|---|---|
-| 470 | SE DECLARA / Cuestión resuelta | **DROP** | These link to `BOE-T-` Constitutional Court rulings which belong to a different domain (judicial, not legislative); they do not represent a norm acting on another norm and would create spurious high-degree nodes |
-| 530 | Cuestión (pending) | **DROP** | Pending constitutional questions are unresolved legal challenges, not enacted relationships; including them would conflate legislative action with judicial process |
-| 402 | SE INTERPRETA | **DROP** | Interpretive instructions are administrative guidance, not binding amendments; they appear rarely and would inflate AMENDS counts for the source norm |
+| 470 | SE DECLARA / Cuestión resuelta | **DROP** | Links to `BOE-T-` Constitutional Court rulings — judicial domain, not legislative; creates spurious high-degree nodes unrelated to the four briefings |
+| 530 | Cuestión (pending) | **DROP** | Unresolved constitutional challenge — not an enacted relationship; conflates legislative action with judicial process |
+| 402 | SE INTERPRETA | **DROP** | Administrative interpretive guidance — not a binding amendment; appears rarely and would inflate AMENDS degree counts |
 
 **Net effect of drops:** the graph contains only relationships that represent enacted legislative
 action (amendment, repeal, citation), making degree-based metrics directly meaningful for
