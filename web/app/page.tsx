@@ -10,12 +10,12 @@ function distillAnswer(b: Briefing): string {
     case 1: {
       const top = b.results?.[0]
       if (!top) return 'Análisis pendiente de datos.'
-      return `El ${shortTitle(top.titulo, 70)} encabeza la lista con ${top.amendment_count ?? '?'} modificaciones acumuladas de ${top.unique_amenders ?? '?'} leyes distintas.`
+      return `El ${top.titulo} encabeza la lista con ${top.amendment_count ?? '?'} modificaciones acumuladas de ${top.unique_amenders ?? '?'} leyes distintas.`
     }
     case 2: {
       const top = b.results?.[0]
       if (!top) return 'Análisis pendiente de datos.'
-      const name = top.numero_oficial ? `La ley ${top.numero_oficial}` : shortTitle(top.titulo, 55)
+      const name = top.numero_oficial ? `La ley ${top.numero_oficial}` : top.titulo
       return `${name} es la norma ómnibus más agresiva: reescribió ${top.unique_targets ?? '?'} leyes distintas en un solo acto.`
     }
     case 3: {
