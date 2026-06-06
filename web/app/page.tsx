@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getBriefing, shortTitle } from '@/lib/api'
 import type { Briefing } from '@/lib/types'
+import HeroCanvas from '@/components/HeroCanvas'
 
 // ── Answer distillation (one sentence from data) ──────────────────────────────
 
@@ -38,7 +39,9 @@ const BRIEFING_META = [
     tag: 'Diagnóstico',
     question: '¿Qué leyes se han vuelto ilegibles?',
     desc: 'Las normas más modificadas son candidatas prioritarias a una redacción limpia.',
-    color: 'border-navy-800',
+    topBorder: 'border-blue-400',
+    cardBg: 'linear-gradient(135deg, #1e3a5f 0%, #0d1e3a 100%)',
+    tagColor: 'text-blue-300',
     num: '01',
   },
   {
@@ -46,7 +49,9 @@ const BRIEFING_META = [
     tag: 'Causa raíz',
     question: '¿Quién fabricó el desorden?',
     desc: 'Las leyes ómnibus que reescriben docenas de estatutos distintos en un solo acto.',
-    color: 'border-amber-700',
+    topBorder: 'border-amber-400',
+    cardBg: 'linear-gradient(135deg, #1e3a5f 0%, #2a1c06 100%)',
+    tagColor: 'text-amber-300',
     num: '02',
   },
   {
@@ -54,7 +59,9 @@ const BRIEFING_META = [
     tag: 'La podredumbre',
     question: '¿Cuánto ordenamiento descansa sobre ley muerta?',
     desc: 'Normas vigentes que invocan leyes derogadas como si aún existiesen.',
-    color: 'border-red-700',
+    topBorder: 'border-red-400',
+    cardBg: 'linear-gradient(135deg, #1e3a5f 0%, #1f0c0c 100%)',
+    tagColor: 'text-red-300',
     num: '03',
   },
   {
@@ -62,7 +69,9 @@ const BRIEFING_META = [
     tag: 'El bisturí',
     question: 'La derogación inacabada de la Ley 30/1992.',
     desc: 'El inventario concreto de leyes que deben actualizarse para cerrar la operación.',
-    color: 'border-emerald-700',
+    topBorder: 'border-emerald-400',
+    cardBg: 'linear-gradient(135deg, #1e3a5f 0%, #061a0f 100%)',
+    tagColor: 'text-emerald-300',
     num: '04',
   },
 ]
@@ -77,8 +86,9 @@ export default async function LandingPage() {
   return (
     <>
       {/* ── Hero ─────────────────────────────────────────────────────── */}
-      <section className="bg-navy-950 text-white">
-        <div className="max-w-7xl mx-auto px-6 py-24 md:py-32">
+      <section className="bg-navy-950 text-white relative overflow-hidden">
+        <HeroCanvas />
+        <div className="relative z-10 max-w-7xl mx-auto px-6 py-24 md:py-32">
           <p className="text-navy-200 text-xs font-semibold tracking-widest uppercase mb-4">
             Madrid, Moncloa — el problema que nadie puede ver
           </p>
@@ -105,50 +115,56 @@ export default async function LandingPage() {
       </section>
 
       {/* ── Four briefings ───────────────────────────────────────────── */}
-      <section className="max-w-7xl mx-auto px-6 py-20">
-        <div className="grid md:grid-cols-2 gap-8">
-          {BRIEFING_META.map((meta, i) => {
-            const data = briefings[i]
-            const answer = data ? distillAnswer(data) : null
+      <section
+        className="bg-navy-900 py-20"
+        style={{
+          backgroundImage: 'radial-gradient(rgba(255,255,255,0.025) 1px, transparent 1px)',
+          backgroundSize: '28px 28px',
+        }}
+      >
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="grid md:grid-cols-2 gap-6">
+            {BRIEFING_META.map((meta, i) => {
+              const data = briefings[i]
+              const answer = data ? distillAnswer(data) : null
 
-            return (
-              <Link
-                key={meta.n}
-                href={`/briefings/${meta.n}`}
-                className={`
-                  group block bg-white border border-slate-200 border-t-4 ${meta.color}
-                  p-10 hover:shadow-md transition-shadow
-                `}
-              >
-                <div className="flex items-start justify-between mb-6">
-                  <span className="text-xs font-semibold tracking-widest text-slate-400 uppercase">
-                    {meta.tag}
+              return (
+                <Link
+                  key={meta.n}
+                  href={`/briefings/${meta.n}`}
+                  className={`group block border border-white/10 border-t-4 ${meta.topBorder} p-10 hover:shadow-2xl hover:shadow-black/50 hover:border-white/20 hover:-translate-y-0.5 transition-all duration-200`}
+                  style={{ background: meta.cardBg }}
+                >
+                  <div className="flex items-start justify-between mb-6">
+                    <span className={`text-xs font-semibold tracking-widest uppercase ${meta.tagColor}`}>
+                      {meta.tag}
+                    </span>
+                    <span className={`text-5xl font-bold leading-none select-none ${meta.tagColor} opacity-20`}>
+                      {meta.num}
+                    </span>
+                  </div>
+
+                  <h2 className="text-xl font-bold text-white mb-3 leading-snug">
+                    {meta.question}
+                  </h2>
+
+                  {answer ? (
+                    <p className="text-navy-200 text-sm leading-relaxed mb-6">
+                      {answer}
+                    </p>
+                  ) : (
+                    <p className="text-navy-300 text-sm italic mb-6">
+                      {meta.desc}
+                    </p>
+                  )}
+
+                  <span className={`${meta.tagColor} text-sm font-medium group-hover:underline`}>
+                    Leer el análisis completo →
                   </span>
-                  <span className="text-5xl font-bold text-slate-100 leading-none select-none">
-                    {meta.num}
-                  </span>
-                </div>
-
-                <h2 className="text-xl font-bold text-slate-900 mb-3 leading-snug">
-                  {meta.question}
-                </h2>
-
-                {answer ? (
-                  <p className="text-slate-600 text-sm leading-relaxed mb-6">
-                    {answer}
-                  </p>
-                ) : (
-                  <p className="text-slate-400 text-sm italic mb-6">
-                    {meta.desc}
-                  </p>
-                )}
-
-                <span className="text-navy-800 text-sm font-medium group-hover:underline">
-                  Leer el análisis completo →
-                </span>
-              </Link>
-            )
-          })}
+                </Link>
+              )
+            })}
+          </div>
         </div>
       </section>
 
@@ -161,7 +177,7 @@ export default async function LandingPage() {
             { label: 'Relaciones jurídicas mapeadas', value: '100 000+' },
           ].map(stat => (
             <div key={stat.label}>
-              <div className="text-4xl font-bold text-navy-800 mb-2">
+              <div className="text-5xl font-bold text-navy-800 mb-2">
                 {stat.value}
               </div>
               <div className="text-sm text-slate-500 uppercase tracking-wide font-medium">

@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import Link from 'next/link'
 import ChatPanel from '@/components/ChatPanel'
+import ReversaLogo from '@/components/ReversaLogo'
 import './globals.css'
 
 const inter = Inter({
@@ -14,6 +15,7 @@ export const metadata: Metadata = {
   title: 'Libro de Estatutos · Consejo de Ministros',
   description:
     'Análisis del corpus legislativo español: consolidación, derogaciones y referencias.',
+  icons: { icon: '/favicon.svg' },
 }
 
 export default function RootLayout({
@@ -25,13 +27,11 @@ export default function RootLayout({
     <html lang="es" className={inter.variable}>
       <body className="min-h-screen flex flex-col">
         {/* ── Navigation ─────────────────────────────────────────────── */}
-        <nav className="bg-navy-950 text-white">
+        <nav className="bg-navy-950 text-white border-b border-navy-900">
           <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
             <Link href="/" className="flex items-center gap-3">
-              <span className="text-xs font-semibold tracking-widest uppercase text-navy-200">
-                Reversa
-              </span>
-              <span className="text-slate-600 select-none">·</span>
+              <ReversaLogo />
+              <span className="text-navy-200 select-none">·</span>
               <span className="text-sm font-medium text-white">
                 Consejo de Ministros
               </span>

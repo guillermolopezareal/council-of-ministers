@@ -20,6 +20,10 @@ import json
 import logging
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path as _Path
+
+from dotenv import load_dotenv
+load_dotenv(_Path(__file__).resolve().parent.parent / ".env")
 from pathlib import Path
 from typing import Annotated
 
