@@ -3,7 +3,8 @@
 @tailwind utilities;
 
 :root {
-  --font-inter: 'Inter', system-ui, sans-serif;
+  --font-serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  --font-sans:  'IBM Plex Sans', system-ui, sans-serif;
 }
 
 @layer base {
@@ -12,36 +13,94 @@
   }
 
   body {
-    @apply bg-stone-50 text-slate-900;
+    @apply bg-paper text-ink font-serif text-base;
   }
 
-  /* Ministerial table */
-  .table-official {
-    @apply w-full text-sm border-collapse;
+  h1, h2, h3 {
+    @apply font-serif text-ink;
   }
-  .table-official th {
-    @apply text-left py-3 px-4 font-semibold text-slate-600 border-b-2 border-slate-200 bg-slate-50 uppercase tracking-wide text-xs;
+
+  /* Tabular figures everywhere a number stands alone or in a table */
+  .figure, table {
+    font-variant-numeric: tabular-nums;
   }
-  .table-official td {
-    @apply py-3 px-4 border-b border-slate-100 align-top;
+
+  /* Editorial table — rules between rows only, never around cells */
+  .table-editorial {
+    @apply w-full text-base border-collapse;
   }
-  .table-official tr:last-child td {
+  .table-editorial th {
+    @apply text-left py-3 px-4 font-sans font-medium text-ink-faint border-b border-rule;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    font-variant: small-caps;
+    text-transform: lowercase;
+  }
+  .table-editorial th.num {
+    @apply text-right;
+  }
+  .table-editorial td {
+    @apply py-4 px-4 border-b border-rule align-top text-base;
+  }
+  .table-editorial td.num {
+    @apply text-right tabular-nums;
+  }
+  .table-editorial tr:last-child td {
     @apply border-b-0;
-  }
-  .table-official tbody tr:hover {
-    @apply bg-slate-50;
   }
 }
 
 @layer components {
+  /* Small-caps section label, sans — used for "kickers" above headlines */
+  .label-kicker {
+    @apply font-sans text-ink-faint;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  /* Primary button — filled ink, rectangular */
+  .btn-primary {
+    @apply inline-flex items-center gap-2 bg-ink text-paper font-sans text-sm px-5 py-2.5 transition-colors duration-150;
+    border-radius: 4px;
+  }
+  .btn-primary:hover {
+    @apply bg-ink-secondary;
+  }
+
+  /* Secondary button — text only, underline on hover */
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 font-sans text-sm text-ink transition-colors duration-150;
+    text-underline-offset: 4px;
+  }
+  .btn-secondary:hover {
+    text-decoration: underline;
+  }
+
+  /* In-text link */
+  .link-accent {
+    @apply text-accent transition-colors duration-150;
+    text-underline-offset: 3px;
+  }
+  .link-accent:hover {
+    text-decoration: underline;
+  }
+
   /* Force-graph container */
   .graph-canvas canvas {
     @apply rounded-sm;
   }
 
-  /* Slide-in panel */
-  .panel-slide {
-    transition: transform 300ms ease, opacity 300ms ease;
+  /* Top-of-page loading bar */
+  .loading-bar {
+    @apply fixed top-0 left-0 right-0 z-50 h-[2px] bg-accent;
+    animation: loading-sweep 1.1s ease-in-out infinite;
+    transform-origin: left;
+  }
+  @keyframes loading-sweep {
+    0%   { transform: scaleX(0);   opacity: 0.4; }
+    50%  { transform: scaleX(0.6); opacity: 1; }
+    100% { transform: scaleX(1);   opacity: 0; }
   }
 }
 
@@ -53,5 +112,6 @@
   background: transparent;
 }
 .thin-scroll::-webkit-scrollbar-thumb {
-  @apply bg-slate-300 rounded-full;
+  background: #ddd9d0;
+  border-radius: 2px;
 }
