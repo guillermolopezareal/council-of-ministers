@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import { getNorm, formatDate, shortTitle } from '@/lib/api'
 import type { NormDetail, GraphNode, NormEdge } from '@/lib/types'
 
@@ -11,33 +10,21 @@ interface NodePanelProps {
   onExpandInGraph: (detail: NormDetail) => void
 }
 
-// ── Status badge ──────────────────────────────────────────────────────────────
+// ── Status — text only, no badge chrome ──────────────────────────────────────
 
-function Status({ node }: { node: GraphNode }) {
-  if (!node.in_corpus) return (
-    <span className="px-2 py-0.5 text-xs bg-slate-100 text-slate-500 border border-slate-200">
-      Sin ID BOE
-    </span>
-  )
-  if (node.is_dead) return (
-    <span className="px-2 py-0.5 text-xs bg-red-50 text-red-700 border border-red-200">
-      Derogada
-    </span>
-  )
-  return (
-    <span className="px-2 py-0.5 text-xs bg-emerald-50 text-emerald-700 border border-emerald-200">
-      En vigor
-    </span>
-  )
+function StatusLine({ node }: { node: GraphNode }) {
+  if (!node.in_corpus) return <span className="text-ink-faint">Sin identificador BOE</span>
+  if (node.is_dead)    return <span className="text-danger">Derogada</span>
+  return <span className="text-ink-secondary">En vigor</span>
 }
 
-// ── Edge group ────────────────────────────────────────────────────────────────
+// ── Edge group — plain text lists, grouped by relation type ──────────────────
 
-const EDGE_LABEL: Record<string, { out: string; in: string; color: string }> = {
-  AMENDS:   { out: 'Modifica',    in: 'Modificada por',   color: 'text-blue-600' },
-  REPEALS:  { out: 'Deroga',      in: 'Derogada por',     color: 'text-red-600' },
-  CITES:    { out: 'Cita',        in: 'Citada por',       color: 'text-emerald-600' },
-  CORRECTS: { out: 'Corrige',     in: 'Corregida por',    color: 'text-amber-600' },
+const EDGE_LABEL: Record<string, { out: string; in: string }> = {
+  AMENDS:   { out: 'Modifica',  in: 'Modificada por' },
+  REPEALS:  { out: 'Deroga',    in: 'Derogada por' },
+  CITES:    { out: 'Cita',      in: 'Citada por' },
+  CORRECTS: { out: 'Corrige',   in: 'Corregida por' },
 }
 
 function EdgeList({
@@ -55,49 +42,40 @@ function EdgeList({
 
   const neighborMap = new Map(neighbors.map(n => [n.id, n]))
 
-  // Group by type
   const byType = new Map<string, NormEdge[]>()
   for (const e of relevant) {
-    const k = e.type
-    if (!byType.has(k)) byType.set(k, [])
-    byType.get(k)!.push(e)
+    if (!byType.has(e.type)) byType.set(e.type, [])
+    byType.get(e.type)!.push(e)
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {[...byType.entries()].map(([type, list]) => {
-        const meta = EDGE_LABEL[type] ?? { out: type, in: type, color: 'text-slate-600' }
+        const meta  = EDGE_LABEL[type] ?? { out: type, in: type }
         const label = direction === 'out' ? meta.out : meta.in
-        const shown = list.slice(0, 5)
-        const extra = list.length - 5
+        const shown = list.slice(0, 6)
+        const extra = list.length - shown.length
 
         return (
           <div key={type}>
-            <div className={`text-xs font-semibold uppercase tracking-wide mb-2 ${meta.color}`}>
-              {label} ({list.length})
+            <div className="label-kicker mb-2">
+              {label} <span className="text-ink-faint">· {list.length}</span>
             </div>
             <ul className="space-y-1.5">
               {shown.map((e, i) => {
                 const otherId = direction === 'out' ? e.target : e.source
                 const other   = neighborMap.get(otherId)
                 return (
-                  <li key={i} className="text-xs text-slate-600 leading-snug">
-                    <span className="font-medium text-slate-900">
-                      {other
-                        ? shortTitle(other.titulo, 55)
-                        : otherId
-                      }
-                    </span>
+                  <li key={i} className="font-serif text-sm text-ink leading-snug">
+                    {other ? shortTitle(other.titulo, 60) : otherId}
                     {e.detail && (
-                      <span className="text-slate-400 ml-1">— {e.detail.slice(0, 60)}</span>
+                      <span className="font-sans text-xs text-ink-faint"> — {e.detail.slice(0, 60)}</span>
                     )}
                   </li>
                 )
               })}
               {extra > 0 && (
-                <li className="text-xs text-slate-400 italic">
-                  y {extra} más…
-                </li>
+                <li className="font-sans text-xs text-ink-faint italic">y {extra} más…</li>
               )}
             </ul>
           </div>
@@ -107,7 +85,7 @@ function EdgeList({
   )
 }
 
-// ── Panel ─────────────────────────────────────────────────────────────────────
+// ── Panel — Wikipedia-infobox styling: serif title, key-value metadata ───────
 
 export default function NodePanel({ node, onClose, onExpandInGraph }: NodePanelProps) {
   const [detail, setDetail] = useState<NormDetail | null>(null)
@@ -124,71 +102,61 @@ export default function NodePanel({ node, onClose, onExpandInGraph }: NodePanelP
 
   if (!node) return null
 
+  const fields: { label: string; value?: string; mono?: boolean }[] = [
+    { label: 'Tipo',    value: node.rango },
+    { label: 'Fecha',   value: formatDate(node.fecha_disposicion) },
+    { label: 'Número',  value: node.numero_oficial },
+    { label: 'Ámbito',  value: node.ambito },
+    { label: 'ID BOE',  value: node.id, mono: true },
+  ]
+
   return (
-    <aside className="flex flex-col h-full bg-white border-l border-slate-200 w-80 flex-shrink-0">
-      {/* Header */}
-      <div className="flex items-start justify-between px-5 pt-5 pb-4 border-b border-slate-100">
-        <div className="flex-1 pr-3">
-          <div className="mb-2">
-            <Status node={node} />
+    <aside className="flex flex-col h-full bg-paper border-l border-rule w-80 flex-shrink-0">
+      {/* Title */}
+      <div className="px-6 pt-6 pb-5 border-b border-rule">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-sans text-xs mb-2"><StatusLine node={node} /></p>
+            <h2 className="font-serif text-lg text-ink leading-snug">
+              {shortTitle(node.titulo, 90) || node.id}
+            </h2>
           </div>
-          <h3 className="text-sm font-semibold text-slate-900 leading-snug">
-            {shortTitle(node.titulo, 80) || node.id}
-          </h3>
+          <button
+            onClick={onClose}
+            className="text-ink-faint hover:text-ink text-xl leading-none flex-shrink-0 mt-0.5"
+            aria-label="Cerrar panel"
+          >
+            ×
+          </button>
         </div>
-        <button
-          onClick={onClose}
-          className="text-slate-400 hover:text-slate-600 text-lg leading-none flex-shrink-0 mt-0.5"
-          aria-label="Cerrar panel"
-        >
-          ×
-        </button>
       </div>
 
-      {/* Metadata */}
-      <div className="px-5 py-4 border-b border-slate-100 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
-        {[
-          { label: 'Tipo', value: node.rango },
-          { label: 'Fecha', value: formatDate(node.fecha_disposicion) },
-          { label: 'Número', value: node.numero_oficial },
-          { label: 'Ámbito', value: node.ambito },
-          { label: 'ID BOE', value: node.id, mono: true },
-        ].map(({ label, value, mono }) =>
-          value ? (
-            <div key={label}>
-              <div className="text-slate-400 uppercase tracking-wide mb-0.5" style={{ fontSize: '10px' }}>
-                {label}
-              </div>
-              <div className={`text-slate-700 leading-snug ${mono ? 'font-mono text-[10px]' : ''}`}>
+      {/* Infobox metadata — compact key-value list */}
+      <div className="px-6 py-5 border-b border-rule">
+        <dl className="space-y-2">
+          {fields.filter(f => f.value).map(({ label, value, mono }) => (
+            <div key={label} className="flex gap-4 text-sm">
+              <dt className="label-kicker w-16 flex-shrink-0 pt-px">{label}</dt>
+              <dd className={`text-ink leading-snug ${mono ? 'font-mono text-xs break-all' : 'font-serif'}`}>
                 {value}
-              </div>
+              </dd>
             </div>
-          ) : null,
-        )}
+          ))}
+        </dl>
       </div>
 
-      {/* Connections */}
-      <div className="flex-1 overflow-y-auto thin-scroll px-5 py-4">
+      {/* Connections — plain text, grouped by relation */}
+      <div className="flex-1 overflow-y-auto thin-scroll px-6 py-5">
         {loading && (
-          <p className="text-slate-400 text-xs">Cargando relaciones…</p>
+          <p className="font-sans text-xs text-ink-faint">Cargando relaciones…</p>
         )}
 
         {detail && (
-          <div className="space-y-6">
-            <EdgeList
-              edges={detail.edges}
-              neighbors={detail.neighbors}
-              nodeId={node.id}
-              direction="out"
-            />
-            <EdgeList
-              edges={detail.edges}
-              neighbors={detail.neighbors}
-              nodeId={node.id}
-              direction="in"
-            />
+          <div className="space-y-7">
+            <EdgeList edges={detail.edges} neighbors={detail.neighbors} nodeId={node.id} direction="out" />
+            <EdgeList edges={detail.edges} neighbors={detail.neighbors} nodeId={node.id} direction="in" />
             {!detail.edges.length && (
-              <p className="text-slate-400 text-xs italic">
+              <p className="font-sans text-xs text-ink-faint italic">
                 Sin relaciones registradas en el corpus.
               </p>
             )}
@@ -196,12 +164,12 @@ export default function NodePanel({ node, onClose, onExpandInGraph }: NodePanelP
         )}
       </div>
 
-      {/* Actions */}
-      <div className="px-5 py-4 border-t border-slate-100 space-y-2">
+      {/* Actions — text-only, underline-on-hover */}
+      <div className="px-6 py-5 border-t border-rule space-y-3">
         {detail && (
           <button
             onClick={() => onExpandInGraph(detail)}
-            className="w-full text-xs bg-navy-800 text-white px-3 py-2 hover:bg-navy-900 transition-colors text-left"
+            className="btn-secondary block"
           >
             Expandir vecinos en el grafo
           </button>
@@ -211,12 +179,12 @@ export default function NodePanel({ node, onClose, onExpandInGraph }: NodePanelP
             href={node.url_html}
             target="_blank"
             rel="noopener noreferrer"
-            className="block w-full text-xs text-navy-800 border border-navy-200 px-3 py-2 hover:bg-navy-50 transition-colors"
+            className="link-accent font-sans text-sm block"
           >
             Ver texto en BOE.es ↗
           </a>
         )}
-        <div className="text-xs text-slate-300 font-mono pt-1 truncate">{node.id}</div>
+        <p className="font-mono text-[10px] text-ink-faint pt-1 break-all">{node.id}</p>
       </div>
     </aside>
   )

@@ -6,7 +6,7 @@ import {
 } from 'react'
 import { getBriefing, getSubgraph, searchNorms, getNorm, shortTitle } from '@/lib/api'
 import type {
-  Briefing, GraphData, GraphLink, GraphNode, NormDetail, Filters, EdgeType,
+  GraphData, GraphLink, GraphNode, NormDetail, Filters, EdgeType,
 } from '@/lib/types'
 import NodePanel from './NodePanel'
 
@@ -14,32 +14,40 @@ import NodePanel from './NodePanel'
 const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), {
   ssr: false,
   loading: () => (
-    <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
-      Inicializando el grafo…
+    <div className="flex-1 flex items-center justify-center text-ink-faint text-sm font-sans">
+      Inicializando el diagrama…
     </div>
   ),
 })
 
-// ── Visual encoding ───────────────────────────────────────────────────────────
+// ── Editorial visual encoding — same values as SubGraph, restrained ──────────
+
+const INK    = '#1a1a1a'
+const DANGER = '#7a2e2a'
+const STUB   = '#bab6ad'
+const ACCENT = '#1f6b4a'
 
 const EDGE_COLORS: Record<string, string> = {
-  AMENDS:   '#3b82f6',
-  REPEALS:  '#ef4444',
-  CITES:    '#10b981',
-  CORRECTS: '#f59e0b',
+  AMENDS:   '#9b9892',
+  REPEALS:  'rgba(122,46,42,0.5)',
+  CITES:    '#c7c3ba',
+  CORRECTS: '#5c5a55',
 }
 
 const EDGE_TYPES: { key: EdgeType; label: string; color: string }[] = [
-  { key: 'AMENDS',   label: 'Modifica',  color: '#3b82f6' },
-  { key: 'REPEALS',  label: 'Deroga',    color: '#ef4444' },
-  { key: 'CITES',    label: 'Cita',      color: '#10b981' },
-  { key: 'CORRECTS', label: 'Corrige',   color: '#f59e0b' },
+  { key: 'AMENDS',   label: 'Modifica',  color: EDGE_COLORS.AMENDS },
+  { key: 'REPEALS',  label: 'Deroga',    color: EDGE_COLORS.REPEALS },
+  { key: 'CITES',    label: 'Cita',      color: EDGE_COLORS.CITES },
+  { key: 'CORRECTS', label: 'Corrige',   color: EDGE_COLORS.CORRECTS },
 ]
 
+const DECADE_MIN = 1800
+const DECADE_MAX = 2030
+
 function nodeColor(n: GraphNode): string {
-  if (!n.in_corpus) return '#cbd5e1'
-  if (n.is_dead)    return '#991b1b'
-  return '#1e3a5f'
+  if (!n.in_corpus) return STUB
+  if (n.is_dead)    return DANGER
+  return INK
 }
 
 // ── Graph merging ─────────────────────────────────────────────────────────────
@@ -53,7 +61,7 @@ function mergeInto(
     if (!nodeMap.has(n.id)) nodeMap.set(n.id, n as GraphNode)
   }
 
-  const linkKey = (l: GraphLink) => {
+  const linkKey = (l: { source: string | GraphNode; target: string | GraphNode; type: string }) => {
     const s = typeof l.source === 'object' ? l.source.id : l.source
     const t = typeof l.target === 'object' ? l.target.id : l.target
     return `${s}::${t}::${l.type}`
@@ -71,7 +79,38 @@ function mergeInto(
   return { nodes: [...nodeMap.values()], links: newLinks }
 }
 
-// ── Sidebar controls ──────────────────────────────────────────────────────────
+// ── Curate the default view: keep the highest-degree nodes + the focal set ───
+
+function curate(
+  merged: { nodes: GraphNode[]; links: GraphLink[] },
+  focalIds: string[],
+  maxNodes = 90,
+): { nodes: GraphNode[]; links: GraphLink[] } {
+  const degree = new Map<string, number>()
+  for (const l of merged.links) {
+    const s = typeof l.source === 'object' ? l.source.id : l.source as string
+    const t = typeof l.target === 'object' ? l.target.id : l.target as string
+    degree.set(s, (degree.get(s) ?? 0) + 1)
+    degree.set(t, (degree.get(t) ?? 0) + 1)
+  }
+  const focalSet = new Set(focalIds)
+  const ranked = [...merged.nodes].sort((a, b) => {
+    const fa = focalSet.has(a.id) ? 1 : 0
+    const fb = focalSet.has(b.id) ? 1 : 0
+    if (fa !== fb) return fb - fa
+    return (degree.get(b.id) ?? 0) - (degree.get(a.id) ?? 0)
+  })
+  const kept = ranked.slice(0, maxNodes)
+  const keptIds = new Set(kept.map(n => n.id))
+  const links = merged.links.filter(l => {
+    const s = typeof l.source === 'object' ? l.source.id : l.source as string
+    const t = typeof l.target === 'object' ? l.target.id : l.target as string
+    return keptIds.has(s) && keptIds.has(t)
+  })
+  return { nodes: kept, links }
+}
+
+// ── Sidebar — minimal, well-typed filters ────────────────────────────────────
 
 function FilterPanel({
   filters, onFilters,
@@ -93,33 +132,33 @@ function FilterPanel({
     onFilters({ ...filters, edgeTypes: next })
   }
 
+  const decadeMin = Math.floor(filters.yearMin / 10) * 10
+  const decadeMax = Math.ceil(filters.yearMax / 10) * 10
+
   return (
-    <aside className="w-60 flex-shrink-0 bg-white border-r border-slate-200 flex flex-col">
+    <aside className="w-64 flex-shrink-0 border-r border-rule flex flex-col overflow-y-auto thin-scroll">
       {/* Search */}
-      <div className="px-4 pt-5 pb-4 border-b border-slate-100">
-        <label className="text-xs font-semibold uppercase tracking-wide text-slate-400 block mb-2">
-          Buscar norma
-        </label>
+      <div className="px-5 pt-6 pb-5 border-b border-rule">
+        <label className="label-kicker block mb-2.5">Buscar norma</label>
         <input
           type="search"
           value={searchQuery}
           onChange={e => onSearchQuery(e.target.value)}
           placeholder="Título, ley, número…"
-          className="w-full text-sm border border-slate-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-navy-800 placeholder-slate-300"
+          className="w-full font-sans text-sm border border-rule px-3 py-2 bg-paper focus:outline-none focus:border-ink placeholder-ink-faint"
+          style={{ borderRadius: '4px' }}
         />
         {searchResults.length > 0 && (
-          <ul className="mt-2 border border-slate-100 divide-y divide-slate-50 max-h-48 overflow-y-auto thin-scroll">
+          <ul className="mt-2 border border-rule divide-y divide-rule max-h-52 overflow-y-auto thin-scroll">
             {searchResults.map(r => (
               <li key={r.id}>
                 <button
                   onClick={() => onSearchSelect(r)}
-                  className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 transition-colors"
+                  className="w-full text-left px-3 py-2.5 font-sans text-xs hover:bg-paper-raised transition-colors duration-150"
                 >
-                  <div className="font-medium text-slate-800 leading-snug">
-                    {shortTitle(r.titulo, 55)}
-                  </div>
+                  <div className="text-ink leading-snug">{shortTitle(r.titulo, 55)}</div>
                   {r.numero_oficial && (
-                    <div className="text-slate-400 mt-0.5">Ley {r.numero_oficial}</div>
+                    <div className="text-ink-faint mt-0.5">Ley {r.numero_oficial}</div>
                   )}
                 </button>
               </li>
@@ -128,86 +167,100 @@ function FilterPanel({
         )}
       </div>
 
-      {/* Relationship type filter */}
-      <div className="px-4 py-4 border-b border-slate-100">
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">
-          Tipo de relación
-        </div>
-        <div className="space-y-2">
+      {/* Relationship type */}
+      <div className="px-5 py-5 border-b border-rule">
+        <div className="label-kicker mb-3">Tipo de relación</div>
+        <div className="space-y-2.5">
           {EDGE_TYPES.map(({ key, label, color }) => (
-            <label key={key} className="flex items-center gap-2 cursor-pointer">
+            <label key={key} className="flex items-center gap-2.5 cursor-pointer group">
               <input
                 type="checkbox"
                 checked={filters.edgeTypes.has(key)}
                 onChange={() => toggleEdge(key)}
-                className="w-3.5 h-3.5 accent-navy-800"
+                className="w-3.5 h-3.5 accent-ink"
               />
-              <span className="w-3 h-0.5 inline-block rounded" style={{ background: color }} />
-              <span className="text-xs text-slate-600">{label}</span>
+              <span className="w-4 h-px inline-block" style={{ background: color }} />
+              <span className="font-sans text-sm text-ink-secondary group-hover:text-ink transition-colors duration-150">
+                {label}
+              </span>
             </label>
           ))}
         </div>
       </div>
 
-      {/* Status filter */}
-      <div className="px-4 py-4 border-b border-slate-100">
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">
-          Estado
-        </div>
-        <label className="flex items-center gap-2 cursor-pointer">
+      {/* Status */}
+      <div className="px-5 py-5 border-b border-rule">
+        <div className="label-kicker mb-3">Estado</div>
+        <label className="flex items-center gap-2.5 cursor-pointer group">
           <input
             type="checkbox"
             checked={filters.liveOnly}
             onChange={e => onFilters({ ...filters, liveOnly: e.target.checked })}
-            className="w-3.5 h-3.5 accent-navy-800"
+            className="w-3.5 h-3.5 accent-ink"
           />
-          <span className="text-xs text-slate-600">Solo normas en vigor</span>
+          <span className="font-sans text-sm text-ink-secondary group-hover:text-ink transition-colors duration-150">
+            Solo normas en vigor
+          </span>
         </label>
       </div>
 
-      {/* Year range */}
-      <div className="px-4 py-4 border-b border-slate-100">
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">
-          Año de disposición
+      {/* Decade range */}
+      <div className="px-5 py-5 border-b border-rule">
+        <div className="label-kicker mb-1">Década de disposición</div>
+        <div className="font-serif text-sm text-ink tabular-nums mb-3">
+          {decadeMin} – {decadeMax}
         </div>
-        <div className="flex items-center gap-2">
-          <input
-            type="number"
-            value={filters.yearMin}
-            onChange={e => onFilters({ ...filters, yearMin: parseInt(e.target.value) || 1800 })}
-            className="w-20 text-xs border border-slate-200 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-navy-800"
-            min={1800} max={2026}
-          />
-          <span className="text-slate-400 text-xs">–</span>
-          <input
-            type="number"
-            value={filters.yearMax}
-            onChange={e => onFilters({ ...filters, yearMax: parseInt(e.target.value) || 2026 })}
-            className="w-20 text-xs border border-slate-200 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-navy-800"
-            min={1800} max={2026}
-          />
+        <div className="space-y-3">
+          <div>
+            <div className="font-sans text-xs text-ink-faint mb-1">Desde</div>
+            <input
+              type="range"
+              min={DECADE_MIN} max={DECADE_MAX} step={10}
+              value={decadeMin}
+              onChange={e => {
+                const v = parseInt(e.target.value)
+                onFilters({ ...filters, yearMin: Math.min(v, filters.yearMax) })
+              }}
+              className="w-full accent-ink"
+            />
+          </div>
+          <div>
+            <div className="font-sans text-xs text-ink-faint mb-1">Hasta</div>
+            <input
+              type="range"
+              min={DECADE_MIN} max={DECADE_MAX} step={10}
+              value={decadeMax}
+              onChange={e => {
+                const v = parseInt(e.target.value)
+                onFilters({ ...filters, yearMax: Math.max(v, filters.yearMin) })
+              }}
+              className="w-full accent-ink"
+            />
+          </div>
         </div>
       </div>
 
-      {/* Node legend */}
-      <div className="px-4 py-4 mt-auto">
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">
-          Nodos
-        </div>
-        <div className="space-y-1.5">
+      {/* Legend */}
+      <div className="px-5 py-5 mt-auto">
+        <div className="label-kicker mb-3">Nodos</div>
+        <div className="space-y-2">
           {[
-            { color: '#1e3a5f', label: 'En vigor' },
-            { color: '#991b1b', label: 'Derogada' },
-            { color: '#cbd5e1', label: 'Sin ID BOE' },
-          ].map(({ color, label }) => (
-            <div key={label} className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color }} />
-              <span className="text-xs text-slate-500">{label}</span>
+            { color: INK,    label: 'En vigor' },
+            { color: DANGER, label: 'Derogada' },
+            { color: STUB,   label: 'Sin ID BOE' },
+            { color: ACCENT, label: 'Norma señalada en un informe', ring: true },
+          ].map(({ color, label, ring }) => (
+            <div key={label} className="flex items-center gap-2.5">
+              <span
+                className="w-2 h-2 rounded-full flex-shrink-0 inline-block"
+                style={ring ? { border: `1.5px solid ${color}` } : { background: color }}
+              />
+              <span className="font-sans text-xs text-ink-faint">{label}</span>
             </div>
           ))}
         </div>
         {loading && (
-          <p className="text-xs text-slate-400 mt-4 italic">Cargando corpus…</p>
+          <p className="font-sans text-xs text-ink-faint mt-4 italic">Cargando corpus…</p>
         )}
       </div>
     </aside>
@@ -221,10 +274,11 @@ export default function GraphExplorer() {
 
   const [allNodes, setAllNodes] = useState<GraphNode[]>([])
   const [allLinks, setAllLinks] = useState<GraphLink[]>([])
+  const [focalIds, setFocalIds] = useState<string[]>([])
   const [loading,  setLoading]  = useState(true)
 
-  const [selected, setSelected]     = useState<GraphNode | null>(null)
-  const [hovered,  setHovered]      = useState<GraphNode | null>(null)
+  const [selected, setSelected] = useState<GraphNode | null>(null)
+  const [hovered,  setHovered]  = useState<GraphNode | null>(null)
 
   const [searchQuery,   setSearchQuery]   = useState('')
   const [searchResults, setSearchResults] = useState<GraphNode[]>([])
@@ -232,9 +286,11 @@ export default function GraphExplorer() {
   const [filters, setFilters] = useState<Filters>({
     edgeTypes: new Set(['AMENDS', 'REPEALS', 'CITES', 'CORRECTS'] as EdgeType[]),
     liveOnly:  false,
-    yearMin:   1800,
-    yearMax:   2026,
+    yearMin:   DECADE_MIN,
+    yearMax:   DECADE_MAX,
   })
+
+  const focalSet = useMemo(() => new Set(focalIds), [focalIds])
 
   // ── Degree map for node sizing ──────────────────────────────────────────────
   const nodeDegree = useMemo(() => {
@@ -266,31 +322,32 @@ export default function GraphExplorer() {
     return { nodes: visNodes, links: visLinks }
   }, [allNodes, allLinks, filters])
 
-  // ── Initial load ────────────────────────────────────────────────────────────
+  // ── Initial load: curated view of high-degree + briefing focal nodes ────────
   useEffect(() => {
     let active = true
     setLoading(true)
 
     const load = async () => {
-      // Seed from top briefing results (highest-degree nodes in the corpus)
-      const [b1, b2] = await Promise.all([getBriefing(1), getBriefing(2)])
+      const [b1, b2, b3, b4] = await Promise.all([
+        getBriefing(1), getBriefing(2), getBriefing(3), getBriefing(4),
+      ])
 
-      const seedIds = [
-        ...(b1?.results ?? []).slice(0, 5).map(r => r.id),
-        ...(b2?.results ?? []).slice(0, 5).map(r => r.id),
+      const seeds = [
+        b1?.results?.[0]?.id,
+        b2?.results?.[0]?.id,
+        b3?.ghost_norms?.[0]?.id,
+        b4?.ley30?.id,
       ].filter(Boolean) as string[]
+      const uniqueSeeds = [...new Set(seeds)]
 
-      // Fallback if briefings not generated yet
-      if (!seedIds.length) {
+      if (!uniqueSeeds.length) {
         setLoading(false)
         return
       }
 
-      // Fetch 1-hop subgraphs for each seed in parallel
       const subs = await Promise.all(
-        seedIds.map(id => getSubgraph(id, 1, [], 200).catch(() => null)),
+        uniqueSeeds.map(id => getSubgraph(id, 1, [], 70).catch(() => null)),
       )
-
       if (!active) return
 
       let merged: { nodes: GraphNode[]; links: GraphLink[] } = { nodes: [], links: [] }
@@ -298,8 +355,10 @@ export default function GraphExplorer() {
         if (sg) merged = mergeInto(merged, { nodes: sg.nodes as GraphNode[], edges: sg.edges })
       }
 
-      setAllNodes(merged.nodes)
-      setAllLinks(merged.links)
+      const curated = curate(merged, uniqueSeeds, 90)
+      setFocalIds(uniqueSeeds)
+      setAllNodes(curated.nodes)
+      setAllLinks(curated.links)
       setLoading(false)
     }
 
@@ -317,7 +376,7 @@ export default function GraphExplorer() {
     return () => clearTimeout(t)
   }, [searchQuery])
 
-  // ── Expand node on click ────────────────────────────────────────────────────
+  // ── Expand node neighborhood ────────────────────────────────────────────────
   const expandNode = useCallback(async (node: GraphNode, detail?: NormDetail) => {
     const d = detail ?? await getNorm(node.id)
     if (!d) return
@@ -336,10 +395,9 @@ export default function GraphExplorer() {
     setSelected(node)
     setSearchQuery('')
     setSearchResults([])
-    // Center graph on node
     if (node.x != null && node.y != null) {
-      graphRef.current?.centerAt(node.x, node.y, 600)
-      graphRef.current?.zoom(3, 600)
+      graphRef.current?.centerAt(node.x, node.y, 500)
+      graphRef.current?.zoom(3, 500)
     }
   }, [])
 
@@ -350,11 +408,10 @@ export default function GraphExplorer() {
     const existing = allNodes.find(n => n.id === node.id)
     if (existing?.x != null) {
       setSelected(existing)
-      graphRef.current?.centerAt(existing.x, existing.y, 600)
-      graphRef.current?.zoom(3, 600)
+      graphRef.current?.centerAt(existing.x, existing.y, 500)
+      graphRef.current?.zoom(3, 500)
       return
     }
-    // Node not in graph yet — fetch and add
     const detail = await getNorm(node.id)
     if (!detail) return
     const newNode = detail.norm as GraphNode
@@ -369,63 +426,74 @@ export default function GraphExplorer() {
     setSelected(newNode)
   }, [allNodes, allLinks])
 
-  // ── Canvas paint ────────────────────────────────────────────────────────────
+  // ── Canvas paint — restrained: status color, accent for focal, weight on hover ──
   const paintNode = useCallback((rawNode: object, ctx: CanvasRenderingContext2D, globalScale: number) => {
     const node = rawNode as GraphNode
     const deg  = nodeDegree.get(node.id) ?? 0
-    const r    = 3 + Math.min(deg, 40) * 0.18
+    const r    = 2.5 + Math.min(deg, 40) * 0.15
+    const isFocal    = focalSet.has(node.id)
     const isSelected = selected?.id === node.id
     const isHovered  = hovered?.id  === node.id
 
-    // Selected ring
+    // Selection ring — ink, thin
     if (isSelected) {
       ctx.beginPath()
-      ctx.arc(node.x!, node.y!, r + 4, 0, 2 * Math.PI)
-      ctx.fillStyle = 'rgba(245,158,11,0.3)'
-      ctx.fill()
-    } else if (isHovered) {
+      ctx.arc(node.x!, node.y!, r + 4.5, 0, 2 * Math.PI)
+      ctx.strokeStyle = INK
+      ctx.lineWidth = 1.25
+      ctx.stroke()
+    }
+
+    // Focal ring — accent
+    if (isFocal) {
       ctx.beginPath()
-      ctx.arc(node.x!, node.y!, r + 2, 0, 2 * Math.PI)
-      ctx.fillStyle = 'rgba(100,116,139,0.2)'
-      ctx.fill()
+      ctx.arc(node.x!, node.y!, r + 2.5, 0, 2 * Math.PI)
+      ctx.strokeStyle = ACCENT
+      ctx.lineWidth = 1.25
+      ctx.stroke()
     }
 
     // Main circle
     ctx.beginPath()
     ctx.arc(node.x!, node.y!, r, 0, 2 * Math.PI)
-    ctx.fillStyle = nodeColor(node)
+    ctx.fillStyle = isFocal ? ACCENT : nodeColor(node)
     ctx.fill()
 
-    // Label — show at high zoom or if selected/hovered
-    if (globalScale >= 2.5 || isSelected || isHovered) {
+    // Hover — subtle weight change only, no halo
+    if (isHovered && !isSelected) {
+      ctx.lineWidth = 1
+      ctx.strokeStyle = 'rgba(26,26,26,0.45)'
+      ctx.stroke()
+    }
+
+    // Label — shown at higher zoom, or when the node is meaningfully in focus
+    if (globalScale >= 2.2 || isSelected || isHovered || isFocal) {
       const label = node.numero_oficial
         ? `Ley ${node.numero_oficial}`
         : (node.titulo?.slice(0, 20) ?? node.id.slice(0, 12))
-      const fontSize = Math.max(7, 11 / globalScale)
-      ctx.font = `${fontSize}px Inter, system-ui, sans-serif`
+      const fontSize = Math.max(7, 10.5 / globalScale)
+      ctx.font = `${fontSize}px var(--font-sans), system-ui, sans-serif`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'top'
-      ctx.fillStyle = isSelected ? '#92400e' : '#334155'
-      ctx.fillText(label, node.x!, node.y! + r + 2)
+      ctx.fillStyle = (isSelected || isFocal) ? INK : '#5c5a55'
+      ctx.fillText(label, node.x!, node.y! + r + 3)
     }
-  }, [nodeDegree, selected, hovered])
+  }, [nodeDegree, selected, hovered, focalSet])
 
   const paintNodePointer = useCallback((rawNode: object, color: string, ctx: CanvasRenderingContext2D) => {
     const node = rawNode as GraphNode
     const deg  = nodeDegree.get(node.id) ?? 0
-    const r    = 3 + Math.min(deg, 40) * 0.18 + 4
+    const r    = 2.5 + Math.min(deg, 40) * 0.15 + 4
     ctx.beginPath()
     ctx.arc(node.x!, node.y!, r, 0, 2 * Math.PI)
     ctx.fillStyle = color
     ctx.fill()
   }, [nodeDegree])
 
-  // ── Node count for HUD ──────────────────────────────────────────────────────
   const hud = `${graphData.nodes.length.toLocaleString('es-ES')} nodos · ${graphData.links.length.toLocaleString('es-ES')} aristas`
 
   return (
     <div className="flex h-full overflow-hidden">
-      {/* Filters sidebar */}
       <FilterPanel
         filters={filters}
         onFilters={setFilters}
@@ -436,17 +504,15 @@ export default function GraphExplorer() {
         loading={loading}
       />
 
-      {/* Graph canvas */}
-      <div className="flex-1 relative bg-slate-50 overflow-hidden graph-canvas">
-        {/* HUD */}
-        <div className="absolute top-3 right-4 z-10 text-xs text-slate-400 bg-white/80 px-2 py-1 border border-slate-100">
+      <div className="flex-1 relative bg-paper overflow-hidden graph-canvas">
+        <div className="absolute top-3 right-4 z-10 font-sans text-xs text-ink-faint bg-paper/90 px-2.5 py-1 border border-rule tabular-nums">
           {hud}
         </div>
 
         {loading && !allNodes.length && (
           <div className="absolute inset-0 flex items-center justify-center z-10">
-            <div className="text-slate-400 text-sm text-center">
-              <div className="mb-2">Cargando nodos del corpus…</div>
+            <div className="font-sans text-ink-faint text-sm text-center">
+              <div className="mb-1.5">Cargando nodos del corpus…</div>
               <div className="text-xs">Esto puede tardar unos segundos en el primer acceso.</div>
             </div>
           </div>
@@ -454,10 +520,10 @@ export default function GraphExplorer() {
 
         {!loading && !allNodes.length && (
           <div className="absolute inset-0 flex items-center justify-center z-10">
-            <div className="text-slate-400 text-sm text-center max-w-xs">
-              <div className="mb-2">No hay datos disponibles.</div>
+            <div className="font-sans text-ink-faint text-sm text-center max-w-xs">
+              <div className="mb-1.5">No hay datos disponibles.</div>
               <div className="text-xs">
-                Ejecute el ingest completo y luego <code>briefings.py</code> antes de usar el explorador.
+                Ejecute el ingest completo y luego <code className="font-mono">briefings.py</code> antes de usar el explorador.
               </div>
             </div>
           </div>
@@ -469,7 +535,7 @@ export default function GraphExplorer() {
           nodeId="id"
           linkSource="source"
           linkTarget="target"
-          linkColor={(l: any) => EDGE_COLORS[l.type] ?? '#94a3b8'}
+          linkColor={(l: any) => EDGE_COLORS[l.type] ?? '#c7c3ba'}
           linkWidth={1}
           linkDirectionalArrowLength={3}
           linkDirectionalArrowRelPos={1}
@@ -477,7 +543,7 @@ export default function GraphExplorer() {
           nodePointerAreaPaint={paintNodePointer}
           onNodeClick={handleNodeClick}
           onNodeHover={(n: object | null) => setHovered(n ? n as GraphNode : null)}
-          backgroundColor="#f8fafc"
+          backgroundColor="#fafaf7"
           cooldownTicks={100}
           d3VelocityDecay={0.4}
           enableNodeDrag
@@ -486,7 +552,6 @@ export default function GraphExplorer() {
         />
       </div>
 
-      {/* Node detail panel */}
       {selected && (
         <NodePanel
           node={selected}
