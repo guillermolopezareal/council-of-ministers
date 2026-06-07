@@ -101,9 +101,13 @@ function contextParagraph(briefingId: 1 | 2 | 3 | 4): string {
 
 // ── Cypher behind disclosure (static — these are the four pre-computed queries) ──
 
-const CYPHER: Record<number, { label: string; query: string }[]> = {
+const CYPHER: Record<number, { label: string; gloss: string; query: string }[]> = {
   1: [{
     label: 'Consulta',
+    gloss:
+      'Para cada norma vigente, cuenta cuántas veces ha sido modificada o ' +
+      'parcialmente derogada, y por cuántas normas distintas — y devuelve ' +
+      'las cinco con más modificaciones acumuladas.',
     query:
 `MATCH (src:Norm)-[r]->(n:Norm)
 WHERE n.in_corpus = true
@@ -122,6 +126,10 @@ RETURN n.id, n.titulo, n.numero_oficial, n.rango,
   }],
   2: [{
     label: 'Consulta',
+    gloss:
+      'Para cada norma vigente, cuenta a cuántas otras normas modifica o ' +
+      'deroga, y a cuántas normas distintas afecta — y devuelve las cinco ' +
+      'que más han reescrito el ordenamiento.',
     query:
 `MATCH (n:Norm)-[r]->(target:Norm)
 WHERE n.in_corpus = true
@@ -137,6 +145,10 @@ RETURN n.id, n.titulo, n.numero_oficial, n.rango,
   3: [
     {
       label: 'Consulta — porcentaje',
+      gloss:
+        'Compara el número total de normas vigentes con el número de ellas ' +
+        'que citan al menos una norma ya derogada, y calcula qué porcentaje ' +
+        'representan.',
       query:
 `MATCH (live:Norm)
 WHERE live.in_corpus = true AND live.is_dead = false
@@ -151,6 +163,10 @@ RETURN total_live, citing_live,
     },
     {
       label: 'Consulta — leyes fantasma',
+      gloss:
+        'Busca las normas derogadas que aún son citadas por normas vigentes, ' +
+        'y devuelve las cinco más citadas — las "leyes fantasma" que más ' +
+        'perduran en el ordenamiento activo.',
       query:
 `MATCH (live:Norm)-[:CITES]->(dead:Norm)
 WHERE live.in_corpus = true
@@ -165,6 +181,10 @@ RETURN dead.id, dead.titulo, dead.numero_oficial, dead.rango,
   ],
   4: [{
     label: 'Consulta',
+    gloss:
+      'Localiza todas las normas vigentes que citan directamente la Ley ' +
+      '30/1992 — derogada en 2021 — y las ordena por fecha de disposición, ' +
+      'para formar el listado de actualizaciones pendientes.',
     query:
 `MATCH (live:Norm)-[r:CITES]->(ley30:Norm {id: $ley30_id})
 WHERE live.in_corpus = true
@@ -174,6 +194,31 @@ RETURN live.id, live.titulo, live.numero_oficial, live.rango,
        r.relacion_texto AS relacion_tipo, r.detail
 ORDER BY live.fecha_disposicion`,
   }],
+}
+
+// ── Subgraph caption — explains why this particular slice is shown ───────────
+
+function subgraphCaption(b: Briefing): string {
+  switch (b.briefing) {
+    case 1: {
+      const top = b.results?.[0]
+      const name = top?.numero_oficial ? `la Ley ${top.numero_oficial}` : 'la norma señalada'
+      return `Mostramos el entorno inmediato de ${name} — las normas que la han modificado y aquellas con las que se relaciona — para apreciar de un vistazo el alcance de su fragmentación.`
+    }
+    case 2: {
+      const top = b.results?.[0]
+      const name = top?.numero_oficial ? `la Ley ${top.numero_oficial}` : 'la norma señalada'
+      return `Mostramos el entorno inmediato de ${name} — las normas que modifica o deroga desde un único acto — para ilustrar el alcance de su efecto ómnibus.`
+    }
+    case 3: {
+      const ghost = b.ghost_norms?.[0]
+      const name = ghost?.numero_oficial ? `la Ley ${ghost.numero_oficial}` : 'la norma derogada más citada'
+      return `Mostramos el entorno inmediato de ${name} — derogada, y aun así citada por normas en vigor — un caso concreto de cómo persiste una "ley fantasma" en el ordenamiento activo.`
+    }
+    case 4: {
+      return 'Mostramos el entorno de la Ley 30/1992 y las normas en vigor que todavía la citan de forma directa: el conjunto exacto que habría que revisar para cerrar la operación de derogación.'
+    }
+  }
 }
 
 // ── Subgraph seed selection ───────────────────────────────────────────────────
@@ -425,7 +470,12 @@ export default async function BriefingPage({ params }: PageProps) {
             </h2>
             <div className="space-y-1.5">
               {(CYPHER[n] ?? []).map(c => (
-                <CypherDisclosure key={c.label} cypher={c.query} label={c.label === 'Consulta' ? 'Ver consulta' : `Ver ${c.label.split('—')[1]?.trim() ?? c.label}`} />
+                <CypherDisclosure
+                  key={c.label}
+                  cypher={c.query}
+                  gloss={c.gloss}
+                  label={c.label === 'Consulta' ? 'Ver consulta' : `Ver ${c.label.split('—')[1]?.trim() ?? c.label}`}
+                />
               ))}
             </div>
           </div>
@@ -468,12 +518,16 @@ export default async function BriefingPage({ params }: PageProps) {
         {/* ── Subgraph ───────────────────────────────────────────────── */}
         {subgraphData && subgraphData.nodes.length > 0 && (
           <section>
-            <div className="flex items-baseline justify-between mb-5 flex-wrap gap-2">
+            <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
               <h2 className="label-kicker">Red de relaciones</h2>
               <span className="font-sans text-xs text-ink-faint tabular-nums">
                 {subgraphData.node_count} nodos · {subgraphData.edge_count} aristas
               </span>
             </div>
+
+            <p className="font-serif text-base text-ink-secondary leading-relaxed max-w-copy mb-5">
+              {subgraphCaption(briefing)}
+            </p>
 
             <SubGraph
               nodes={subgraphData.nodes}

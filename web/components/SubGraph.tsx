@@ -41,6 +41,15 @@ function nodeColor(n: Norm): string {
   return INK
 }
 
+// Canvas `font` strings cannot resolve CSS custom properties — `var(--font-sans)`
+// is invalid and silently ignored, leaving the canvas at its default size.
+// Resolve the actual font-family list from the CSS variable once, at runtime.
+function resolveSansFont(): string {
+  if (typeof window === 'undefined') return 'system-ui, sans-serif'
+  const v = getComputedStyle(document.documentElement).getPropertyValue('--font-sans').trim()
+  return v || 'system-ui, sans-serif'
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function SubGraph({
@@ -50,6 +59,7 @@ export default function SubGraph({
   height = 340,
 }: SubGraphProps) {
   const highlightSet = useMemo(() => new Set(highlightIds), [highlightIds])
+  const sansFont      = useMemo(() => resolveSansFont(), [])
 
   const graphData = useMemo(() => ({
     nodes: nodes.map(n => ({ ...n })),   // clone so ForceGraph2D can mutate
@@ -110,8 +120,9 @@ export default function SubGraph({
               ? `Ley ${(node as Norm).numero_oficial}`
               : (node as Norm).titulo?.slice(0, 22) ?? node.id
           )
-          const fontSize = Math.max(7, 10 / globalScale)
-          ctx.font = `${fontSize}px var(--font-sans), system-ui, sans-serif`
+          // Keep label size constant on screen — don't let it balloon when zooming in
+          const fontSize = 10 / globalScale
+          ctx.font = `${fontSize}px ${sansFont}`
           ctx.textAlign = 'center'
           ctx.textBaseline = 'top'
           ctx.fillStyle = isHl ? '#1a1a1a' : '#5c5a55'

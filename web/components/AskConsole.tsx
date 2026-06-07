@@ -133,7 +133,10 @@ function ExchangeBlock({ exchange, isLatest }: { exchange: Exchange; isLatest: b
 
           {finishedTyping && exchange.response.cypher && (
             <div className="mt-8">
-              <CypherDisclosure cypher={exchange.response.cypher} />
+              <CypherDisclosure
+                cypher={exchange.response.cypher}
+                gloss="Esta es la consulta que el sistema generó y ejecutó contra el grafo para construir la respuesta anterior."
+              />
             </div>
           )}
 

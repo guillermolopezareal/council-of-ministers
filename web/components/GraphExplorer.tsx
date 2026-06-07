@@ -50,6 +50,15 @@ function nodeColor(n: GraphNode): string {
   return INK
 }
 
+// Canvas `font` strings cannot resolve CSS custom properties — `var(--font-sans)`
+// is invalid and silently ignored, leaving the canvas at its default size.
+// Resolve the actual font-family list from the CSS variable once, at runtime.
+function resolveSansFont(): string {
+  if (typeof window === 'undefined') return 'system-ui, sans-serif'
+  const v = getComputedStyle(document.documentElement).getPropertyValue('--font-sans').trim()
+  return v || 'system-ui, sans-serif'
+}
+
 // ── Graph merging ─────────────────────────────────────────────────────────────
 
 function mergeInto(
@@ -291,6 +300,7 @@ export default function GraphExplorer() {
   })
 
   const focalSet = useMemo(() => new Set(focalIds), [focalIds])
+  const sansFont  = useMemo(() => resolveSansFont(), [])
 
   // ── Degree map for node sizing ──────────────────────────────────────────────
   const nodeDegree = useMemo(() => {
@@ -471,14 +481,15 @@ export default function GraphExplorer() {
       const label = node.numero_oficial
         ? `Ley ${node.numero_oficial}`
         : (node.titulo?.slice(0, 20) ?? node.id.slice(0, 12))
-      const fontSize = Math.max(7, 10.5 / globalScale)
-      ctx.font = `${fontSize}px var(--font-sans), system-ui, sans-serif`
+      // Keep label size constant on screen — don't let it balloon when zooming in
+      const fontSize = 10.5 / globalScale
+      ctx.font = `${fontSize}px ${sansFont}`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'top'
       ctx.fillStyle = (isSelected || isFocal) ? INK : '#5c5a55'
       ctx.fillText(label, node.x!, node.y! + r + 3)
     }
-  }, [nodeDegree, selected, hovered, focalSet])
+  }, [nodeDegree, selected, hovered, focalSet, sansFont])
 
   const paintNodePointer = useCallback((rawNode: object, color: string, ctx: CanvasRenderingContext2D) => {
     const node = rawNode as GraphNode
