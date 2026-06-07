@@ -116,7 +116,7 @@ export default async function LandingPage() {
 
       {/* ── Four briefings ───────────────────────────────────────────── */}
       <section
-        className="bg-navy-900 py-20"
+        className="bg-navy-950 py-20 border-t border-white/5"
         style={{
           backgroundImage: 'radial-gradient(rgba(255,255,255,0.025) 1px, transparent 1px)',
           backgroundSize: '28px 28px',
@@ -169,18 +169,18 @@ export default async function LandingPage() {
       </section>
 
       {/* ── Corpus footnote ──────────────────────────────────────────── */}
-      <section className="border-t border-slate-200 bg-white">
-        <div className="max-w-7xl mx-auto px-6 py-12 grid md:grid-cols-3 gap-10">
+      <section className="border-t border-white/5 bg-navy-950">
+        <div className="max-w-7xl mx-auto px-6 py-16 grid md:grid-cols-3 gap-10">
           {[
             { label: 'Normas consolidadas', value: '12 288' },
             { label: 'Normas en vigor', value: '~9 100' },
             { label: 'Relaciones jurídicas mapeadas', value: '100 000+' },
           ].map(stat => (
             <div key={stat.label}>
-              <div className="text-5xl font-bold text-navy-800 mb-2">
+              <div className="text-5xl font-bold text-white mb-2">
                 {stat.value}
               </div>
-              <div className="text-sm text-slate-500 uppercase tracking-wide font-medium">
+              <div className="text-sm text-white uppercase tracking-wide font-medium">
                 {stat.label}
               </div>
             </div>

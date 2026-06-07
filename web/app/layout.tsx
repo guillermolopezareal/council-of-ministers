@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   title: 'Libro de Estatutos · Consejo de Ministros',
   description:
     'Análisis del corpus legislativo español: consolidación, derogaciones y referencias.',
-  icons: { icon: '/favicon.svg' },
+  icons: { icon: '/reversa-favicon.jpg', shortcut: '/reversa-favicon.jpg' },
 }
 
 export default function RootLayout({
@@ -61,8 +61,8 @@ export default function RootLayout({
         <ChatPanel />
 
         {/* ── Footer ────────────────────────────────────────────────── */}
-        <footer className="border-t border-slate-200 bg-white mt-auto">
-          <div className="max-w-7xl mx-auto px-6 py-6 flex items-center justify-between text-xs text-slate-400">
+        <footer className="border-t border-white/5 bg-navy-950 mt-auto">
+          <div className="max-w-7xl mx-auto px-6 py-6 flex items-center justify-between text-xs text-navy-300">
             <span>
               Datos: Boletín Oficial del Estado · API pública (boe.es/datosabiertos)
             </span>
