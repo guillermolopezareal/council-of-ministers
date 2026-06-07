@@ -5,37 +5,12 @@ Una página. Cada decisión tiene una razón.
 
 ---
 
-## El esquema
-
-Una sola etiqueta de nodo. Tres relaciones legislativas — más una de erratas. Todas las aristas
-apuntan de la norma que actúa hacia la norma sobre la que actúa.
-
-```mermaid
-graph LR
-    A["<b>:Norm</b><br/>────────────────────<br/>id · titulo · rango<br/>fecha_disposicion<br/>estatus_derogacion<br/>vigencia_agotada<br/><b>is_dead</b> · <b>in_corpus</b>"]
-
-    A -- ":AMENDS<br/>{relacion_codigo, detail}" --> B[":Norm<br/>(modificada)"]
-    A -- ":REPEALS<br/>{is_partial}" --> C[":Norm<br/>(derogada)"]
-    A -- ":CITES<br/>{relacion_texto}" --> D[":Norm<br/>(citada)"]
-    A -. ":CORRECTS<br/>(erratas)" .-> E[":Norm"]
-
-    style A fill:#1a1a1a,color:#fafaf7,stroke:#1a1a1a
-```
-
-**`is_dead`** (derivado): la norma ya no rige — por derogación, vigencia agotada o anulación.
-**`in_corpus`**: la norma pertenece al corpus consolidado que ingerimos; `false` marca un nodo
-*stub* — citado desde fuera del corpus, del que solo conocemos el identificador. Con solo este
-diagrama ya se entiende el 70 % del modelo: un grafo dirigido donde el sentido de la flecha es
-la acción legislativa, y dos banderas bastan para responder "¿está viva?" y "¿la conocemos de
-verdad?".
-
----
-
 ## La decisión central: por qué grafo, y por qué Neo4j
 
-Un grafo es la respuesta obvia — Reversa ya lo sabe, lo pide en el propio reto. Lo que merece
-defensa es **Neo4j frente a la alternativa real**: Postgres con CTEs recursivas, que también
-modela grafos y ya teníamos en la caja de herramientas.
+Un grafo es la respuesta natural a un corpus en el que cada norma modifica, deroga y cita a
+otras decenas — la pregunta que de verdad merece respuesta es **por qué Neo4j** frente a la
+alternativa real que se evaluó: Postgres con CTEs recursivas, que también modela grafos y ya
+estaba disponible.
 
 Postgres era viable. Pero las cuatro preguntas — "¿cuántas veces la han modificado, y cuántas
 normas distintas?", "¿qué fracción del corpus vivo cita una ley derogada?", "¿cuál es el radio
