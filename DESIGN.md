@@ -1,59 +1,111 @@
-# Design Document
+# Documento de diseño
 
-**BOE Legislative Graph — schema, tradeoffs, and what comes next.**
-One page. Every decision has a reason.
+**Grafo legislativo del BOE — esquema y por qué.**
+Una página. Cada decisión tiene una razón.
 
 ---
 
-## Schema
+## El esquema
 
-One node label. Four edge types. All edges point from the acting norm to the norm it acts on.
+Una sola etiqueta de nodo. Tres relaciones legislativas — más una de erratas. Todas las aristas
+apuntan de la norma que actúa hacia la norma sobre la que actúa.
 
 ```mermaid
 graph LR
-    A["<b>:Norm</b><br/>─────────────────<br/>id · titulo · rango<br/>fecha_disposicion<br/>estatus_derogacion<br/>vigencia_agotada<br/>is_dead · in_corpus"] -- ":AMENDS<br/>{relacion_codigo, detail}" --> B[:Norm]
-    A -- ":REPEALS<br/>{is_partial}" --> C[:Norm]
-    A -- ":CITES<br/>{relacion_texto}" --> D[:Norm]
-    A -- ":CORRECTS" --> E[:Norm]
+    A["<b>:Norm</b><br/>────────────────────<br/>id · titulo · rango<br/>fecha_disposicion<br/>estatus_derogacion<br/>vigencia_agotada<br/><b>is_dead</b> · <b>in_corpus</b>"]
+
+    A -- ":AMENDS<br/>{relacion_codigo, detail}" --> B[":Norm<br/>(modificada)"]
+    A -- ":REPEALS<br/>{is_partial}" --> C[":Norm<br/>(derogada)"]
+    A -- ":CITES<br/>{relacion_texto}" --> D[":Norm<br/>(citada)"]
+    A -. ":CORRECTS<br/>(erratas)" .-> E[":Norm"]
+
+    style A fill:#1a1a1a,color:#fafaf7,stroke:#1a1a1a
 ```
 
-**Why one label:** every norm in the 12 045-norm corpus (`in_corpus = true`) carries the same property set. Splitting by `rango` (Ley, Real Decreto, Orden…) would add join complexity without enabling a single query that a property filter can't handle more simply.
-
-**Why edges point forward (acting → acted-on):** the BOE `analisis` block encodes each relationship twice — once in the source norm's `anteriores` and again in the target's `posteriores`. Processing only `anteriores` produces exactly one edge per relationship with no deduplication logic required. The reverse view is free via `MATCH (n)<-[r]-()`.
-
-**Dropped edge types:** codes 470 (Constitutional Court declarations), 530 (pending constitutional questions), and 402 (interpretive instructions) connect norms to `BOE-T-` judicial documents that belong to a different domain. Including them would inflate degree counts and distort every briefing metric.
-
----
-
-## The three biggest tradeoffs
-
-**1. `is_dead` as a derived boolean, not a query over three fields.**
-The status of a norm is encoded across three raw properties: `estatus_derogacion`, `vigencia_agotada`, and `estatus_anulacion`. Every briefing query that filters by status would need `WHERE n.estatus_derogacion = 'S' OR n.vigencia_agotada = 'S' OR n.estatus_anulacion = 'S'`. Storing a derived `is_dead` boolean at load time makes every briefing Cypher simpler and faster, and the computation happens once rather than on every query. The tradeoff: we lose the ability to distinguish between "explicitly repealed" and "validity expired" without joining back to the raw fields. For the four briefings, any form of dead-norm is correctly treated as dead. We keep the raw fields on the node so the distinction is still auditable.
-
-**2. Pre-computed briefings over live queries.**
-`briefings.py` runs four Cypher queries once and writes the results to JSON. The API serves them from memory. The alternative — recomputing on each page load — would add 50–500 ms of Neo4j latency to every request and require the API to hold a session open during rendering. The briefings answer strategic policy questions, not real-time monitoring; the corpus updates at most daily. Staleness is acceptable. A minister opening the dashboard gets sub-millisecond responses and never waits for a graph traversal.
-
-**3. Law-level graph, not article-level.**
-The BOE `analisis` block records relationships at the norm level: "Ley X modifies Ley Y." The `texto` block has the article-level detail, but parsing it would require NLP to identify article boundaries and match amendment language against article identifiers. Building an article-level graph would have taken the full week on its own. The law-level graph answers all four briefings exactly as specified. The `detail` property on each edge preserves the raw article reference text so the article-level layer can be added later without re-ingesting.
+**`is_dead`** (derivado): la norma ya no rige — por derogación, vigencia agotada o anulación.
+**`in_corpus`**: la norma pertenece al corpus consolidado que ingerimos; `false` marca un nodo
+*stub* — citado desde fuera del corpus, del que solo conocemos el identificador. Con solo este
+diagrama ya se entiende el 70 % del modelo: un grafo dirigido donde el sentido de la flecha es
+la acción legislativa, y dos banderas bastan para responder "¿está viva?" y "¿la conocemos de
+verdad?".
 
 ---
 
-## What we cut
+## La decisión central: por qué grafo, y por qué Neo4j
 
-**Full-text search over legal text.** The `/texto` endpoint returns the actual statute in HTML. We ingest only `metadatos` and `analisis`. Adding text search would require a Neo4j full-text index or a separate Elasticsearch deployment, and the briefings don't need it.
+Un grafo es la respuesta obvia — Reversa ya lo sabe, lo pide en el propio reto. Lo que merece
+defensa es **Neo4j frente a la alternativa real**: Postgres con CTEs recursivas, que también
+modela grafos y ya teníamos en la caja de herramientas.
 
-**Incremental ingest.** `ingest.py` is resumable (skips files on disk) but not delta-aware (doesn't detect norms updated since last run). The `_index.json` carries `fecha_actualizacion` per norm; a production scheduler could filter to `from=<last_run_date>` and re-fetch only changed norms in minutes.
-
-**Authentication.** The API has open CORS and no auth. Fine for a one-week demo. Any real ministry deployment adds an OAuth2 layer at the reverse proxy before touching the application code.
+Postgres era viable. Pero las cuatro preguntas — "¿cuántas veces la han modificado, y cuántas
+normas distintas?", "¿qué fracción del corpus vivo cita una ley derogada?", "¿cuál es el radio
+de impacto de derogar la Ley 30/1992?" — cruzan varios saltos de relación con condiciones
+distintas en cada uno. En Cypher son un `MATCH` de una línea con una flecha que cambia de
+sentido. En SQL recursivo son una `WITH RECURSIVE` que hay que releer tres veces para confiar en
+que no duplica caminos. El almacenamiento nativo de grafo hace que cada salto cueste lo mismo,
+no una unión más sobre una tabla que crece. Y Neo4j Community en Docker no añade coste
+operativo: una imagen, sin licencia, sin cuenta. La consulta natural en una línea, y cero
+fricción para levantarlo — esa combinación inclina la balanza.
 
 ---
 
-## With another week
+## Cuatro decisiones de modelado que merecen defensa
 
-**Article-level resolution.** Model `(:Artículo)` nodes inside each `(:Norm)` and make "SE MODIFICA el art. 42" an edge to a specific article. Briefing 01 becomes surgically precise: not "the Código Civil has been amended 85 times" but "Article 9 has been amended 11 times by 8 different laws."
+**1. Una sola relación por sentido — `AMENDS`, no también `AMENDED_BY`.**
+Cada relación se almacena una vez, en el sentido de la acción (`A -[:AMENDS]-> B` = "A modifica
+a B"). El sentido contrario se deriva con `MATCH (n)<-[:AMENDS]-()`, que Neo4j recorre igual de
+rápido al revés. Duplicar la relación duplicaría escritura, espacio y — el día que una copia se
+desincronice — bugs. Una arista, una verdad.
 
-**Amendment-path tracing.** A query like "show me everything that has ever touched this article, in chronological order" is a first-class use case for a legislative graph. The data is all there; it needs a UI that renders a timeline, not a force graph.
+**2. Nodos *stub* para normas citadas fuera del corpus.**
+Una norma del corpus puede citar una ley de 1932 ausente de `legislacion-consolidada` — el
+corpus consolidado no es el universo legislativo completo, solo su parte viva y mantenida.
+Frente a descartar la arista (perder la señal), creamos un `:Norm` con `in_corpus: false`,
+`is_dead: null`: conserva la relación, real en derecho, sin fingir metadatos que no tenemos. El
+filtro `in_corpus = true` los aparta de toda métrica de las cuatro preguntas — están solo para
+que ninguna arista quede colgando.
 
-**AI-generated plain summaries.** Each briefing result is a norm with a title and a set of edges. A single prompt to a language model produces the plain-language explanation a minister would otherwise need a lawyer for. The graph is the retrieval layer; the model is the translation layer.
+**3. `estatus_derogacion` y dos campos más, colapsados en un booleano `is_dead`.**
+El estado de vigencia vive repartido en tres campos crudos — `estatus_derogacion`,
+`vigencia_agotada`, `estatus_anulacion` — cada uno con matices (derogación total o parcial,
+vigente con modificaciones, vigencia agotada por desuso). Conservamos los tres, intactos y
+auditables, pero derivamos `is_dead = (cualquiera de los tres = "S")`. Las cuatro preguntas solo
+necesitan vivo/muerto; ninguna pregunta *por qué* dejó de estar vigente. El matiz se documenta;
+no se modela — modelarlo habría significado repetir una disyunción de tres condiciones en cada
+consulta, sin que ninguna briefing la usara jamás.
 
-**Production deployment.** Containerise the stack (Neo4j, FastAPI, Next.js), add a nightly cron to refresh the index, and put it behind a ministry SSO. One Dockerfile per service, one Compose file, one pipeline.
+**4. Tres códigos de relación descartados — 470, 530, 402.**
+El bloque `analisis` codifica cada relación con un número (`relacion.codigo`); trece códigos se
+mapean a `AMENDS`/`REPEALS`/`CITES`/`CORRECTS`. Tres se excluyen a propósito:
+
+| Código | Texto | Por qué se descarta |
+|---|---|---|
+| 470 | SE DECLARA / Cuestión resuelta | Enlaza con sentencias del Constitucional (`BOE-T-…`) — dominio judicial, no legislativo; generaría nodos de grado artificialmente alto |
+| 530 | Cuestión (pendiente) | Una cuestión de inconstitucionalidad sin resolver no es una relación legislativa promulgada |
+| 402 | SE INTERPRETA | Orientación interpretativa, no una modificación vinculante — inflaría `AMENDS` sin aportar señal |
+
+El criterio: el grafo solo contiene **actos legislativos promulgados** — modificar, derogar,
+citar, corregir. Así "grado de entrada" y "de salida" significan exactamente lo que el Consejo
+necesita.
+
+---
+
+## Lo que decidimos no construir
+
+**Artículos individuales.** El `analisis` registra relaciones a nivel de norma ("la Ley X
+modifica la Ley Y"); bajar al artículo exigiría NLP para casar lenguaje de enmienda con límites
+de artículo en el texto íntegro — la semana entera, para una precisión que ninguna de las
+cuatro preguntas pide.
+
+**El texto íntegro de cada norma.** `/texto` devuelve el articulado en HTML. No lo ingerimos:
+el grafo responde sin él, y persistirlo multiplicaría el almacenamiento por un texto que
+ninguna consulta lee.
+
+**Versionado temporal de las relaciones.** No registramos *cuándo* nació cada `AMENDS` o
+`CITES`, solo su existencia actual. Una cronología de "todo lo que ha tocado este artículo"
+es un caso de uso legítimo a futuro — pero las cuatro briefings preguntan por el estado *actual*
+del ordenamiento, que el grafo ya captura sin ambigüedad.
+
+---
+
+*Esquema completo, tabla íntegra de códigos de relación y detalle de cada decisión, en `SCHEMA.md`.*
