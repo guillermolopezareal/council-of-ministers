@@ -123,7 +123,7 @@ Every consolidated norm (law, decree, order, resolution…) is one node.
   estatus_derogacion String  "S" = repealed, "N" = in force
   vigencia_agotada   String  "S" = expired,  "N" = valid
   is_dead            Boolean true  ↔  repealed OR expired OR annulled
-  in_corpus          Boolean true for the 12 288 corpus norms; false for stubs
+  in_corpus          Boolean true for the 12 045 corpus norms; false for stubs
   url_html           String? URL on boe.es
 
 Relationships — all DIRECTED from acting norm → affected norm:

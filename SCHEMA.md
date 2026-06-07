@@ -9,7 +9,8 @@ in-force + repealed + expired). Every decision below is followed by a one-senten
 
 ### `:Norm`
 
-Every entry in the corpus (12 288 norms) becomes a single `:Norm` node.
+Every ingested catalogue entry becomes a single `:Norm` node; the loaded
+corpus (`in_corpus: true`) holds 12 045 norms.
 Norms referenced in `id_norma` fields but absent from the corpus also become `:Norm` nodes,
 flagged with `in_corpus: false` (see §5).
 
@@ -32,7 +33,7 @@ flagged with `in_corpus: false` (see §5).
 | `is_dead` | bool | derived | see §4 |
 | `url_eli` | string \| null | `metadatos.url_eli` | absent on pre-ELI norms (e.g. 1887 norm) |
 | `url_html` | string | `metadatos.url_html_consolidada` | always present |
-| `in_corpus` | bool | — | `true` for the 12 288 ingested norms; `false` for stub nodes |
+| `in_corpus` | bool | — | `true` for the 12 045 loaded norms; `false` for stub nodes |
 | `fecha_actualizacion` | datetime | `metadatos.fecha_actualizacion` | for incremental refresh |
 
 **Justification for a single label:** all norms in the corpus share the same property set;
@@ -223,7 +224,7 @@ Observed in posteriores of BOE-A-1889-4763 (Constitutional Court sentencias).
 These are dropped (see §3) because the corresponding edge type (470 SE DECLARA) is excluded,
 so no stub is needed.
 
-### 5c. Normal BOE ID not in our 12 288
+### 5c. Normal BOE ID not in our loaded corpus
 
 Some `anteriores` reference norms (e.g. old pre-corpus laws from the Gaceta era) that exist
 in the BOE system but may not be in the consolidated-legislation collection.
