@@ -2,7 +2,7 @@
 
 > Turn the Spanish BOE into a knowledge graph. Answer the four questions the Council of Ministers will actually ask in that room.
 
-12 045 consolidated norms. Two centuries of amendments, repeals, and citations. Mapped as a graph, queried in milliseconds, presented as a briefing a minister can read without touching a query. A natural-language assistant lets ministers ask their own questions in Spanish or English — the system generates the Cypher, runs it, and shows both the answer and the query.
+12 045 consolidated norms. Two centuries of amendments, repeals, and citations. Mapped as a graph, queried in milliseconds, presented as a briefing a minister can read without touching a query. A dedicated `/ask` console lets ministers pose their own questions in plain Spanish — the system generates the Cypher, runs it, and reveals the query on request.
 
 ---
 
@@ -35,7 +35,7 @@ cp .env.example .env
 Edit `.env` and set at minimum:
 ```
 NEO4J_PASSWORD=password
-ANTHROPIC_API_KEY=sk-ant-...   # optional — only needed for the /ask chat
+ANTHROPIC_API_KEY=sk-ant-...   # optional — only needed for the /ask page
 ```
 
 Create `web/.env.local`:
@@ -107,7 +107,7 @@ Open **http://localhost:3000**.
 | `NEO4J_URI` | `bolt://localhost:7687` | No |
 | `NEO4J_USER` | `neo4j` | No |
 | `NEO4J_PASSWORD` | — | **Yes** |
-| `ANTHROPIC_API_KEY` | — | No (activates `/ask` chat) |
+| `ANTHROPIC_API_KEY` | — | No (activates the `/ask` page) |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Set to `http://127.0.0.1:8000` in `web/.env.local` on Windows |
 
 ---
@@ -133,11 +133,11 @@ briefings.py       — four parameterized Cypher queries → data/briefings/*.js
     │   ├── /subgraph        bounded BFS for explorer
     │   └── /ask             LLM → Cypher → result (claude-sonnet-4-5)
     │
-    └── web/       Next.js 13 + Tailwind
-        ├── /                landing with four briefing cards
-        ├── /briefings/[id]  answer + table + embedded graph
-        ├── /explore         full interactive graph explorer
-        └── ChatPanel        floating natural-language assistant
+    └── web/       Next.js 13 + Tailwind — editorial, serif/sans, single accent
+        ├── /                single-sentence opening + four briefings as numbered rows
+        ├── /briefings/[id]  answer-first layout, table, embedded subgraph + caption
+        ├── /explore         curated graph explorer (Wikipedia-infobox side panel)
+        └── /ask             dedicated natural-language console (typewriter reveal)
 ```
 
 ---
@@ -156,10 +156,11 @@ briefings.py       — four parameterized Cypher queries → data/briefings/*.js
 │   └── db.py              Neo4j driver singleton
 ├── web/
 │   ├── app/               Next.js App Router pages
-│   │   ├── page.tsx       Landing — four briefing cards
-│   │   ├── briefings/[id] One page per question
-│   │   └── explore/       Full graph explorer
-│   └── components/        SubGraph, GraphExplorer, NodePanel, ChatPanel
+│   │   ├── page.tsx       Landing — single sentence + briefings as numbered rows
+│   │   ├── briefings/[id] Answer-first layout, one page per question
+│   │   ├── explore/       Curated graph explorer
+│   │   └── ask/           Dedicated natural-language console
+│   └── components/        SubGraph, GraphExplorer, NodePanel, AskConsole, CypherDisclosure
 ├── data/
 │   ├── raw/               <id>.json per norm + _index.json
 │   └── briefings/         1.json – 4.json (frontend data)
@@ -168,7 +169,8 @@ briefings.py       — four parameterized Cypher queries → data/briefings/*.js
 ├── SCHEMA.md              Graph schema with all decisions (incl. full relation code table)
 ├── DESIGN.md              One-page design document (Deliverable 3)
 ├── BRIEFINGS.md           Live briefing output with Cypher
-└── VIDEO.md               5-minute video script for the Council
+├── PITCH_SCRIPT.md        5-minute video script for the Council (Deliverable 4)
+└── PROJECT_OVERVIEW.md    Full project narrative — problem, pipeline, deliverables
 ```
 
 ---
@@ -203,8 +205,8 @@ Every script is idempotent:
 | 1 | Code in a public repository | This repo |
 | 2 | Web platform with graph + four briefings | `web/` — runs at localhost:3000 |
 | 3 | 1-page design doc | `DESIGN.md` |
-| 4 | 5-minute video for the Council | `VIDEO.md` (script) |
-| Bonus | Natural-language `/ask` chat assistant | Floating "Consultar" button on every page |
+| 4 | 5-minute video for the Council | `PITCH_SCRIPT.md` (script for the recorded video) |
+| Bonus | Natural-language `/ask` assistant | Dedicated console at `/ask` — typewriter reveal, hidden Cypher disclosure |
 
 ---
 

@@ -26,7 +26,7 @@ The BOE (Boletín Oficial del Estado) publishes a machine-readable API of all co
 | 2 | Web platform: interactive graph + four briefing pages | ✅ |
 | 3 | One-page design document (schema and rationale) | ✅ `DESIGN.md` |
 | 4 | Five-minute video addressed to the Council | ✅ `PITCH_SCRIPT.md` |
-| Bonus | Natural-language `/ask` chat assistant (LLM → Cypher → result) | ✅ |
+| Bonus | Natural-language `/ask` console (LLM → Cypher → result) | ✅ |
 
 ---
 
@@ -145,50 +145,64 @@ Key design decisions:
 
 ## 6. Frontend (`web/`)
 
-A Next.js 13 app with Tailwind CSS. Chose Next.js 13 specifically for Node.js 17.6.0 compatibility (Next.js 14+ requires Node 18+).
+A Next.js 13 app with Tailwind CSS, in an editorial register — restrained, serif-led,
+near-monochrome with a single deep-green accent. Built for a cabinet-level
+audience: ministers and chiefs of staff, not engineers. Chose Next.js 13
+specifically for Node.js 17.6.0 compatibility (Next.js 14+ requires Node 18+).
 
 ### Pages
 
 **Landing page (`/`)**
-- Animated particle-graph canvas in the hero (75 floating nodes + connecting edges, simulating the legislative graph)
-- Real Reversa logo (white PNG) in the navigation bar
-- SVG favicon matching the logo
-- Four briefing cards with dark gradient backgrounds unique to each briefing (blue/amber/red/emerald) and colored accent borders
-- Corpus statistics: 12,288 norms, ~9,100 in force, 100,000+ relationships mapped
-- Each card displays the live answer distilled from the pre-computed briefing data
+- A single large serif sentence stating the live corpus size, pulled from the
+  API at request time (no hardcoded figures): "El Consejo de Ministros gobierna
+  a ciegas un corpus de 12.045 normas."
+- One short paragraph of context — two sentences, no marketing copy
+- The four briefings presented as numbered rows (01–04), table-of-contents
+  style — not cards: each row gives the question, the headline figure, and a
+  one-sentence answer drawn live from the pre-computed briefing data
 
 **Briefing pages (`/briefings/1` through `/briefings/4`)**
-- Dark navy header with the answer as the first and largest element on the page
-- Contextual paragraph explaining the political significance
-- Official-style data table with full results
-- Embedded subgraph visualization (react-force-graph-2d) showing the 1-hop neighbourhood of the top result
-- Breadcrumb navigation and prev/next briefing links
+- The answer comes first: a single sentence in large display serif, exactly
+  what the minister needs to know, before any chrome
+- A contextual paragraph explaining why the figure matters
+- A proper editorial table — thin rules between rows, no borders around cells,
+  small-caps sans-serif headers, right-aligned tabular numerals
+- An embedded subgraph (react-force-graph-2d) of the relevant 1-hop
+  neighbourhood, with a one-sentence caption explaining *why* that particular
+  slice is shown, and constant-size labels regardless of zoom level
+- The Cypher query is hidden by default behind a "Ver consulta" disclosure,
+  preceded by a plain-Spanish gloss of what the query computes — the minister
+  is never confronted with raw code, but can verify it if curious
 
 **Graph Explorer (`/explore`)**
-- Full-screen interactive force graph
-- Search any norm by title, ID, or número oficial
-- Click any node to expand its neighbourhood
-- NodePanel sidebar with full norm metadata
-- Edge filter by type (AMENDS / REPEALS / CITES / CORRECTS)
-- Color coding: navy = in force, red = repealed, grey = referenced but not in corpus
+- A curated default view — not all ~12,000 nodes, but the 1-hop neighbourhoods
+  of the four briefings' focal norms, merged and trimmed to the ~90
+  highest-degree nodes (focal norms always retained, highlighted in accent)
+- Left-sidebar filters: free-text search, relationship-type checkboxes
+  (AMENDS / CITES / REPEALS / CORRECTS), in-force toggle, decade range sliders
+- Click any node to open a Wikipedia-infobox-style side panel: title in serif,
+  compact key-value metadata list, incoming/outgoing relations as plain-text
+  lists — no hover animation beyond a subtle weight change
+- Muted, value-driven color encoding (ink = in force, deep red = repealed,
+  warm grey = referenced but outside the corpus) instead of a rainbow legend
 
-**Chat assistant (all pages)**
-- Floating "Consultar" button present on every page
-- Natural-language questions in Spanish or English
-- Powered by `claude-sonnet-4-5` with the graph schema in the system prompt
-- Returns the plain-language explanation, the generated Cypher, and the result table
-- Ministers can ask their own questions without touching a query
+**Ask console (`/ask`)**
+- A dedicated page (not a floating chat widget): a centered serif input with
+  the prompt "Pregunte al ordenamiento jurídico…"
+- Question, then a typewriter-style reveal of the plain-language answer, then
+  — once settled — the same hidden-Cypher disclosure pattern as the briefings,
+  then a results table
+- No avatars, no chat bubbles — reads like a printed exchange, not an app
 
 ### Components
 
 | Component | Purpose |
 |---|---|
-| `HeroCanvas` | Client-side animated particle canvas for the hero background |
-| `ReversaLogo` | Displays the Reversa brand logo from `/public/reversa-logo-white.png` |
-| `GraphExplorer` | Full-screen force graph with search and click-to-expand |
-| `SubGraph` | Embedded read-only subgraph for briefing pages |
-| `NodePanel` | Slide-in sidebar with norm detail and edge list |
-| `ChatPanel` | Floating natural-language assistant |
+| `GraphExplorer` | Curated force graph with filters, search and click-to-expand |
+| `SubGraph` | Embedded read-only subgraph for briefing pages, with editorial styling |
+| `NodePanel` | Wikipedia-infobox-style side panel with norm detail and edge lists |
+| `AskConsole` | Dedicated `/ask` page — typewriter reveal, no chat chrome |
+| `CypherDisclosure` | Hidden-by-default "Ver consulta" block with a plain-Spanish gloss |
 
 ---
 

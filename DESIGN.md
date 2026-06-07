@@ -17,7 +17,7 @@ graph LR
     A -- ":CORRECTS" --> E[:Norm]
 ```
 
-**Why one label:** every norm in the 12 288-norm corpus carries the same property set. Splitting by `rango` (Ley, Real Decreto, Orden…) would add join complexity without enabling a single query that a property filter can't handle more simply.
+**Why one label:** every norm in the 12 045-norm corpus (`in_corpus = true`) carries the same property set. Splitting by `rango` (Ley, Real Decreto, Orden…) would add join complexity without enabling a single query that a property filter can't handle more simply.
 
 **Why edges point forward (acting → acted-on):** the BOE `analisis` block encodes each relationship twice — once in the source norm's `anteriores` and again in the target's `posteriores`. Processing only `anteriores` produces exactly one edge per relationship with no deduplication logic required. The reverse view is free via `MATCH (n)<-[r]-()`.
 
